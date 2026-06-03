@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { requireAdminApiKey } from "@/app/api/_lib/admin-auth";
 import { getBiOperationsService } from "@/bi-ops";
 
 const reportSchema = z.object({
@@ -18,6 +19,8 @@ const favoriteSchema = z.object({
 });
 
 export async function POST(req: Request): Promise<Response> {
+  const denied = requireAdminApiKey(req);
+  if (denied) return denied;
   const payload = await req.json().catch(() => null);
   if (payload && typeof payload === "object" && "favorite" in payload) {
     const favParsed = favoriteSchema.safeParse(payload.favorite);

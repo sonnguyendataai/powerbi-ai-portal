@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { checkRateLimit } from "@/app/api/_lib/rate-limit";
 import { postEmbedToken } from "@/api-embed";
 import { resolveSessionUser } from "@/app/api/_lib/session";
+import { loadEnv } from "@/env";
 
 const schema = z.object({
   reportId: z.string().min(1),
@@ -12,6 +14,18 @@ const schema = z.object({
 
 export async function POST(req: Request): Promise<Response> {
   const user = resolveSessionUser(req);
+  const env = loadEnv(process.env);
+  const rate = checkRateLimit(
+    `embed:${user.tenantId}:${user.userId}`,
+    env.EMBED_RATE_LIMIT_PER_MIN,
+    60_000,
+  );
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited", retryAfterSeconds: rate.retryAfterSeconds ?? 60 },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds ?? 60) } },
+    );
+  }
   const json = await req.json().catch(() => null);
   const parsed = schema.safeParse(json);
   if (!parsed.success) {

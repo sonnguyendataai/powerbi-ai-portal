@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { requireAdminApiKey } from "@/app/api/_lib/admin-auth";
 import { getBiOperationsService } from "@/bi-ops";
 
 const importUserSchema = z.array(
@@ -12,12 +13,16 @@ const importUserSchema = z.array(
   }),
 );
 
-export async function GET(): Promise<Response> {
+export async function GET(req: Request): Promise<Response> {
+  const denied = requireAdminApiKey(req);
+  if (denied) return denied;
   const svc = getBiOperationsService();
   return NextResponse.json({ exportedUsers: svc.exportUsers() });
 }
 
 export async function POST(req: Request): Promise<Response> {
+  const denied = requireAdminApiKey(req);
+  if (denied) return denied;
   const payload = await req.json().catch(() => null);
   const parsed = importUserSchema.safeParse(payload);
   if (!parsed.success) {

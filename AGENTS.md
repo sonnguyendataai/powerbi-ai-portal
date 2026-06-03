@@ -19,6 +19,7 @@
 - Tenant isolation is mandatory for every data and tool operation.
 - Every tool call must pass policy validation before execution.
 - Keep model and tool integrations provider-agnostic through adapters.
+- Production deploys must pass CI typecheck/test/build gates.
 
 ## Repository Layout
 
@@ -30,4 +31,5 @@
 - `packages/powerbi-embedded` - embed token and effective identity helpers
 - `packages/bi-operations` - legacy-grade BI user/role/report/rule/page operations
 - `docs/architecture` - architecture and ADR docs
+- `docs/runbooks` - rollout, hardening, and production go-live procedures
 - `.agents` - reusable prompts, modes, skills, policies, and eval assets

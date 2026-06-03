@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { requireAdminApiKey } from "@/app/api/_lib/admin-auth";
 import { getBiOperationsService } from "@/bi-ops";
 
 const permissionSchema = z.object({
@@ -10,6 +11,8 @@ const permissionSchema = z.object({
 });
 
 export async function GET(req: Request): Promise<Response> {
+  const denied = requireAdminApiKey(req);
+  if (denied) return denied;
   const url = new URL(req.url);
   const userId = url.searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId_required" }, { status: 400 });
@@ -18,6 +21,8 @@ export async function GET(req: Request): Promise<Response> {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  const denied = requireAdminApiKey(req);
+  if (denied) return denied;
   const payload = await req.json().catch(() => null);
   const parsed = permissionSchema.safeParse(payload);
   if (!parsed.success) {

@@ -14,6 +14,9 @@ export async function postEmbedToken(
   },
 ): Promise<{ embedUrl: string; embedToken: string; expiresAt: string }> {
   const env = loadEnv(process.env);
+  if (!env.POWERBI_TENANT_ID || !env.POWERBI_CLIENT_ID || !env.POWERBI_CLIENT_SECRET) {
+    throw new Error("Power BI credentials are not configured");
+  }
   const service = new PowerBiEmbedTokenService({
     tenantId: env.POWERBI_TENANT_ID,
     clientId: env.POWERBI_CLIENT_ID,

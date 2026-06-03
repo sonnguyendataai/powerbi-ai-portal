@@ -10,6 +10,17 @@ pnpm typecheck
 pnpm test
 ```
 
+## Production readiness
+
+- Set required production env vars from `.env.example`:
+  - `APP_ENV=prod`
+  - `POWERBI_TENANT_ID`, `POWERBI_CLIENT_ID`, `POWERBI_CLIENT_SECRET`
+  - `PORTAL_ADMIN_API_KEY`
+- Readiness probes:
+  - `GET /api/health`
+  - `GET /api/ready`
+- CI quality gates run typecheck, tests, and web build in `.github/workflows/ci.yml`.
+
 ## Core capabilities
 
 - App-level RBAC/ABAC and EffectiveIdentity-based RLS for embed
