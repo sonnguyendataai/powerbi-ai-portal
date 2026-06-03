@@ -27,14 +27,14 @@ export async function POST(req: Request): Promise<Response> {
     if (!favParsed.success) {
       return NextResponse.json({ error: "invalid_favorite_request", issues: favParsed.error.issues }, { status: 400 });
     }
-    const svc = getBiOperationsService();
+    const svc = await getBiOperationsService();
     return NextResponse.json({ favorite: svc.toggleFavorite(favParsed.data.userId, favParsed.data.reportId) });
   }
   const parsed = reportSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
   }
-  const svc = getBiOperationsService();
+  const svc = await getBiOperationsService();
   const report = svc.upsertReport(parsed.data);
   return NextResponse.json({ report }, { status: 200 });
 }

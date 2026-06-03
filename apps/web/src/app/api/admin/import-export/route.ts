@@ -16,7 +16,7 @@ const importUserSchema = z.array(
 export async function GET(req: Request): Promise<Response> {
   const denied = requireAdminApiKey(req);
   if (denied) return denied;
-  const svc = getBiOperationsService();
+  const svc = await getBiOperationsService();
   return NextResponse.json({ exportedUsers: svc.exportUsers() });
 }
 
@@ -28,7 +28,7 @@ export async function POST(req: Request): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
   }
-  const svc = getBiOperationsService();
+  const svc = await getBiOperationsService();
   const imported = parsed.data.map((u) => svc.upsertUser(u));
   return NextResponse.json({ importedCount: imported.length }, { status: 200 });
 }

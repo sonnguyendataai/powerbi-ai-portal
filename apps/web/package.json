@@ -18,6 +18,7 @@
     "@portal/mcp-tools": "workspace:*",
     "@portal/powerbi-embedded": "workspace:*",
     "next": "^15.5.0",
+    "postgres": "^3.4.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^3.24.1"

@@ -16,7 +16,7 @@ export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const userId = url.searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId_required" }, { status: 400 });
-  const svc = getBiOperationsService();
+  const svc = await getBiOperationsService();
   return NextResponse.json({ permissions: svc.getUserPermissions(userId), reports: svc.listReportsForUser(userId) });
 }
 
@@ -28,7 +28,7 @@ export async function POST(req: Request): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
   }
-  const svc = getBiOperationsService();
+  const svc = await getBiOperationsService();
   const permission = svc.assignPermission({
     userId: parsed.data.userId,
     reportId: parsed.data.reportId,

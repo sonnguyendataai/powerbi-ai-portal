@@ -8,6 +8,7 @@ const schema = z.object({
   POWERBI_API_BASE_URL: z.string().url().optional(),
   PORTAL_ADMIN_API_KEY: z.string().min(16).optional(),
   BI_OPS_STORE_FILE: z.string().min(1).default("./data/bi-ops.json"),
+  DATABASE_URL: z.string().url().optional(),
   CHAT_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(20),
   EMBED_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(40),
 });
@@ -26,6 +27,7 @@ export function loadEnv(source: Record<string, string | undefined>): Env {
       parsed.data.POWERBI_CLIENT_ID ? null : "POWERBI_CLIENT_ID",
       parsed.data.POWERBI_CLIENT_SECRET ? null : "POWERBI_CLIENT_SECRET",
       parsed.data.PORTAL_ADMIN_API_KEY ? null : "PORTAL_ADMIN_API_KEY",
+      parsed.data.DATABASE_URL ? null : "DATABASE_URL",
     ].filter(Boolean);
     if (missing.length > 0) {
       throw new Error(`Missing required prod env vars: ${missing.join(", ")}`);
