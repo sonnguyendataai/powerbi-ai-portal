@@ -18,6 +18,9 @@ flowchart LR
   embedApi --> rls[EffectiveIdentityRLS]
   rls --> pbiSemantic[PowerBISemanticModel]
   orchestrator --> memory[services/memory]
+  portal --> adminApi[AdminOperationsAPI]
+  adminApi --> biOps[packages/bi-operations]
+  biOps --> roleGraph[UserRoleReportRulePageGraph]
   policy --> audit[AuditLogs]
 ```
 
@@ -27,3 +30,5 @@ flowchart LR
 - App-level RBAC/ABAC controls every tool invocation and token mint action.
 - Effective identity roles map from portal roles to semantic model RLS roles.
 - Tool layer is adapter-based to support MCP preview churn and REST fallback.
+- Legacy BI administration strengths are preserved through `packages/bi-operations` and exposed via `/api/admin/*` routes.
+- Report/page/rule permissions and favorite workflows are now first-class enterprise operations in the new portal.

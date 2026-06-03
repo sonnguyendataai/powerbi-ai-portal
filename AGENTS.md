@@ -7,6 +7,10 @@
 - AI Q&A grounded in governed enterprise data
 - Data preparation assistance with policy checks
 - Natural-language chart generation and embedded Power BI visualization
+- Enterprise BI operations inherited from the legacy portal:
+  - role-based report/page/rule administration
+  - user report permissions and favorites
+  - user import/export administration workflows
 
 ## Non-negotiables
 
@@ -24,5 +28,6 @@
 - `packages/agent-core` - policy engine, contracts, and orchestration primitives
 - `packages/mcp-tools` - MCP tool registries and allowlists
 - `packages/powerbi-embedded` - embed token and effective identity helpers
+- `packages/bi-operations` - legacy-grade BI user/role/report/rule/page operations
 - `docs/architecture` - architecture and ADR docs
 - `.agents` - reusable prompts, modes, skills, policies, and eval assets

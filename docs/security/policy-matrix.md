@@ -11,3 +11,4 @@
 - Resource must always start with `tenant:{tenantId}:`.
 - Deny-by-default when mapping role to RLS returns empty.
 - Reject cross-tenant tool actions and cross-tenant embed requests.
+- For legacy-style admin actions (assign report/page/rule, import/export users), only `portal-admin` can execute write operations.
