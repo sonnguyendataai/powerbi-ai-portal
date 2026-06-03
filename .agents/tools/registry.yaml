@@ -1,0 +1,17 @@
+tools:
+  - name: list_datasets
+    backend: powerbi-mcp
+    risk: low
+    mode: read
+  - name: execute_dax_query
+    backend: powerbi-mcp
+    risk: medium
+    mode: read
+  - name: create_measure
+    backend: powerbi-mcp
+    risk: high
+    mode: write
+  - name: search
+    backend: fabric-core-mcp
+    risk: low
+    mode: read

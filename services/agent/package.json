@@ -1,0 +1,16 @@
+{
+  "name": "@portal/agent-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo lint-ok"
+  },
+  "dependencies": {
+    "@portal/agent-core": "workspace:*",
+    "@portal/mcp-tools": "workspace:*"
+  }
+}
