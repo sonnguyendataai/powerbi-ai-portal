@@ -20,6 +20,8 @@ pnpm test
   - `GET /api/health`
   - `GET /api/ready`
 - CI quality gates run typecheck, tests, and web build in `.github/workflows/ci.yml`.
+- Vercel deployment workflow is available in `.github/workflows/vercel-deploy.yml`.
+- Vercel setup guide: `docs/runbooks/vercel-deployment.md`.
 
 ## Core capabilities
 
