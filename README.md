@@ -22,6 +22,7 @@ pnpm test
 - CI quality gates run typecheck, tests, and web build in `.github/workflows/ci.yml`.
 - Vercel deployment workflow is available in `.github/workflows/vercel-deploy.yml`.
 - Vercel setup guide: `docs/runbooks/vercel-deployment.md`.
+- BI admin operations persist snapshots to `BI_OPS_STORE_FILE` (ephemeral on serverless; use DB for durable multi-instance).
 
 ## Core capabilities
 

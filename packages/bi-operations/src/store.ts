@@ -18,7 +18,17 @@ export interface BiOpsStore {
   favorites: FavoriteReport[];
 }
 
-export function createBiOpsStore(): BiOpsStore {
+export interface BiOpsStoreSnapshot {
+  users: BiUser[];
+  roles: BiRole[];
+  rules: BiRule[];
+  reports: BiReport[];
+  pages: BiPage[];
+  permissions: UserPermission[];
+  favorites: FavoriteReport[];
+}
+
+export function createBiOpsStore(seed?: Partial<BiOpsStoreSnapshot>): BiOpsStore {
   const roles = new Map<string, BiRole>([
     ["role-admin", { id: "role-admin", name: "Admin", isRequiredRule: false }],
     ["role-member", { id: "role-member", name: "Member", isRequiredRule: false }],
@@ -65,13 +75,41 @@ export function createBiOpsStore(): BiOpsStore {
     ],
   ]);
 
+  if (seed?.roles) {
+    for (const role of seed.roles) roles.set(role.id, role);
+  }
+  if (seed?.reports) {
+    for (const report of seed.reports) reports.set(report.id, report);
+  }
+  if (seed?.pages) {
+    for (const page of seed.pages) pages.set(page.id, page);
+  }
+  if (seed?.rules) {
+    for (const rule of seed.rules) rules.set(rule.id, rule);
+  }
+  if (seed?.users) {
+    for (const user of seed.users) users.set(user.id, user);
+  }
+
   return {
     users,
     roles,
     rules,
     reports,
     pages,
-    permissions: [],
-    favorites: [],
+    permissions: seed?.permissions ? [...seed.permissions] : [],
+    favorites: seed?.favorites ? [...seed.favorites] : [],
+  };
+}
+
+export function toSnapshot(store: BiOpsStore): BiOpsStoreSnapshot {
+  return {
+    users: [...store.users.values()],
+    roles: [...store.roles.values()],
+    rules: [...store.rules.values()],
+    reports: [...store.reports.values()],
+    pages: [...store.pages.values()],
+    permissions: [...store.permissions],
+    favorites: [...store.favorites],
   };
 }

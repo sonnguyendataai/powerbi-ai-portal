@@ -42,3 +42,9 @@ Workflow:
 - `POST /api/embed/token` succeeds for a test tenant/report.
 - `POST /api/chat` returns answer and evidence.
 - `GET /api/admin/users` requires valid `x-admin-api-key`.
+
+## 5) BI operations persistence notes
+
+- The admin operations store now persists snapshots to `BI_OPS_STORE_FILE` on every mutation.
+- On Vercel serverless, file persistence is ephemeral; use `/tmp/bi-ops.json` for per-instance persistence.
+- For durable multi-instance production, migrate BI operations storage to managed Postgres.

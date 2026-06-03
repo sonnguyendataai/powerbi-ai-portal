@@ -12,10 +12,17 @@ import {
   type UserExportRecord,
   type UserPermission,
 } from "./types";
-import { createBiOpsStore, type BiOpsStore } from "./store";
+import { createBiOpsStore, toSnapshot, type BiOpsStore, type BiOpsStoreSnapshot } from "./store";
+
+interface BiOperationsOptions {
+  onMutate?: (snapshot: BiOpsStoreSnapshot) => void;
+}
 
 export class BiOperationsService {
-  constructor(private readonly store: BiOpsStore = createBiOpsStore()) {}
+  constructor(
+    private readonly store: BiOpsStore = createBiOpsStore(),
+    private readonly options: BiOperationsOptions = {},
+  ) {}
 
   listUsers(): BiUser[] {
     return [...this.store.users.values()];
@@ -24,6 +31,7 @@ export class BiOperationsService {
   upsertUser(user: BiUser): BiUser {
     const parsed = biUserSchema.parse(user);
     this.store.users.set(parsed.id, parsed);
+    this.persist();
     return parsed;
   }
 
@@ -34,6 +42,7 @@ export class BiOperationsService {
   upsertRole(role: BiRole): BiRole {
     const parsed = biRoleSchema.parse(role);
     this.store.roles.set(parsed.id, parsed);
+    this.persist();
     return parsed;
   }
 
@@ -50,18 +59,21 @@ export class BiOperationsService {
   upsertReport(report: BiReport): BiReport {
     const parsed = biReportSchema.parse(report);
     this.store.reports.set(parsed.id, parsed);
+    this.persist();
     return parsed;
   }
 
   upsertPage(page: BiPage): BiPage {
     const parsed = biPageSchema.parse(page);
     this.store.pages.set(parsed.id, parsed);
+    this.persist();
     return parsed;
   }
 
   upsertRule(rule: BiRule): BiRule {
     const parsed = biRuleSchema.parse(rule);
     this.store.rules.set(parsed.id, parsed);
+    this.persist();
     return parsed;
   }
 
@@ -76,6 +88,7 @@ export class BiOperationsService {
         ),
     );
     this.store.permissions.push(permission);
+    this.persist();
     return permission;
   }
 
@@ -87,9 +100,11 @@ export class BiOperationsService {
     const idx = this.store.favorites.findIndex((fav) => fav.userId === userId && fav.reportId === reportId);
     if (idx >= 0) {
       this.store.favorites.splice(idx, 1);
+      this.persist();
       return { reportId, isFavorite: false };
     }
     this.store.favorites.push({ userId, reportId });
+    this.persist();
     return { reportId, isFavorite: true };
   }
 
@@ -106,5 +121,9 @@ export class BiOperationsService {
         customFields: user.customFields,
       };
     });
+  }
+
+  private persist(): void {
+    this.options.onMutate?.(toSnapshot(this.store));
   }
 }

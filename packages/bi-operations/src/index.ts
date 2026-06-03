@@ -1,5 +1,5 @@
 export { BiOperationsService } from "./service";
-export { createBiOpsStore } from "./store";
+export { createBiOpsStore, toSnapshot } from "./store";
 export type {
   BiRole,
   BiRule,
@@ -10,3 +10,4 @@ export type {
   FavoriteReport,
   UserExportRecord,
 } from "./types";
+export type { BiOpsStoreSnapshot } from "./store";

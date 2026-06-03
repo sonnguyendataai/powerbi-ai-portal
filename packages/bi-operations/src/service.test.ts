@@ -20,4 +20,19 @@ describe("BiOperationsService", () => {
     svc.assignPermission({ userId: "user-1", reportId: "report-sales" });
     expect(svc.listReportsForUser("user-1").map((r) => r.id)).toContain("report-sales");
   });
+
+  it("emits snapshot on mutation", () => {
+    const snapshots: number[] = [];
+    const svc = new BiOperationsService(undefined, {
+      onMutate: (snapshot) => snapshots.push(snapshot.users.length),
+    });
+    svc.upsertUser({
+      id: "user-2",
+      email: "u2@tenant.local",
+      tenantId: "tenant-default",
+      roleIds: ["role-member"],
+      customFields: {},
+    });
+    expect(snapshots.length).toBe(1);
+  });
 });
