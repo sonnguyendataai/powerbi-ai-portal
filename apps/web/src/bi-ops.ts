@@ -1,43 +1,42 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import {
   BiOperationsService,
   createBiOpsStore,
-  type BiOpsStoreSnapshot,
 } from "@portal/bi-operations";
 import { loadEnv } from "@/env";
+import { loadBiOpsSnapshot, persistBiOpsSnapshot } from "@/bi-ops-persistence";
 
 declare global {
   // eslint-disable-next-line no-var
   var __biOperationsService: BiOperationsService | undefined;
+  // eslint-disable-next-line no-var
+  var __biOperationsServicePromise: Promise<BiOperationsService> | undefined;
 }
 
-export function getBiOperationsService(): BiOperationsService {
+export async function getBiOperationsService(): Promise<BiOperationsService> {
   if (!globalThis.__biOperationsService) {
-    const env = loadEnv(process.env);
-    const filePath = resolve(process.cwd(), env.BI_OPS_STORE_FILE);
-    const store = createBiOpsStore(readSnapshot(filePath));
-    globalThis.__biOperationsService = new BiOperationsService(store, {
-      onMutate: (snapshot) => writeSnapshot(filePath, snapshot),
-    });
+    if (!globalThis.__biOperationsServicePromise) {
+      globalThis.__biOperationsServicePromise = buildBiOperationsService();
+    }
+    globalThis.__biOperationsService = await globalThis.__biOperationsServicePromise;
   }
   return globalThis.__biOperationsService;
 }
 
-function readSnapshot(filePath: string): BiOpsStoreSnapshot | undefined {
-  try {
-    const raw = readFileSync(filePath, "utf8");
-    return JSON.parse(raw) as BiOpsStoreSnapshot;
-  } catch {
-    return undefined;
-  }
-}
-
-function writeSnapshot(filePath: string, snapshot: BiOpsStoreSnapshot): void {
-  try {
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
-  } catch {
-    // Best-effort persistence in environments without writable disk.
-  }
+async function buildBiOperationsService(): Promise<BiOperationsService> {
+  const env = loadEnv(process.env);
+  const snapshot = await loadBiOpsSnapshot({
+    filePath: env.BI_OPS_STORE_FILE,
+    ...(env.DATABASE_URL ? { databaseUrl: env.DATABASE_URL } : {}),
+  });
+  const store = createBiOpsStore(snapshot);
+  return new BiOperationsService(store, {
+    onMutate: (next) =>
+      persistBiOpsSnapshot(
+        {
+          filePath: env.BI_OPS_STORE_FILE,
+          ...(env.DATABASE_URL ? { databaseUrl: env.DATABASE_URL } : {}),
+        },
+        next,
+      ),
+  });
 }

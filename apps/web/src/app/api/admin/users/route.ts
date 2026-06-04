@@ -14,7 +14,7 @@ const upsertUserSchema = z.object({
 export async function GET(req: Request): Promise<Response> {
   const denied = requireAdminApiKey(req);
   if (denied) return denied;
-  const svc = getBiOperationsService();
+  const svc = await getBiOperationsService();
   return NextResponse.json({ users: svc.listUsers() });
 }
 
@@ -26,7 +26,7 @@ export async function POST(req: Request): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
   }
-  const svc = getBiOperationsService();
+  const svc = await getBiOperationsService();
   const user = svc.upsertUser(parsed.data);
   return NextResponse.json({ user }, { status: 200 });
 }

@@ -17,6 +17,7 @@ Set these in Vercel for `Preview` and `Production`:
 - `POWERBI_API_BASE_URL` (default: `https://api.powerbi.com/v1.0/myorg`)
 - `PORTAL_ADMIN_API_KEY`
 - `BI_OPS_STORE_FILE` (for ephemeral file mode use `/tmp/bi-ops.json`)
+- `DATABASE_URL` (required for durable multi-instance production state)
 - `CHAT_RATE_LIMIT_PER_MIN`
 - `EMBED_RATE_LIMIT_PER_MIN`
 - Optional: `POWERBI_MCP_URL`, `FABRIC_CORE_MCP_URL`
@@ -45,6 +46,6 @@ Workflow:
 
 ## 5) BI operations persistence notes
 
-- The admin operations store now persists snapshots to `BI_OPS_STORE_FILE` on every mutation.
-- On Vercel serverless, file persistence is ephemeral; use `/tmp/bi-ops.json` for per-instance persistence.
-- For durable multi-instance production, migrate BI operations storage to managed Postgres.
+- The admin operations store persists snapshots on every mutation.
+- If `DATABASE_URL` is set, snapshots are loaded/saved to Postgres table `bi_ops_snapshots`.
+- File persistence at `BI_OPS_STORE_FILE` remains a fallback and is useful for local development.
