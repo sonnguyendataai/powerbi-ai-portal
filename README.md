@@ -16,6 +16,7 @@ pnpm test
   - `APP_ENV=prod`
   - `POWERBI_TENANT_ID`, `POWERBI_CLIENT_ID`, `POWERBI_CLIENT_SECRET`
   - `PORTAL_ADMIN_API_KEY`
+  - Database: `DATABASE_URL` or Vercel Supabase-provided `POSTGRES_URL` / `POSTGRES_URL_NON_POOLING`
 - Readiness probes:
   - `GET /api/health`
   - `GET /api/ready`
