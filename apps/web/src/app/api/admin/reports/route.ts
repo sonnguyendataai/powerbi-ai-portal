@@ -11,6 +11,7 @@ const reportSchema = z.object({
   displayName: z.string().min(1),
   embedUrl: z.string().url().or(z.string().startsWith("https://")),
   pageIds: z.array(z.string().min(1)),
+  isDeleted: z.boolean().default(false),
 });
 
 const favoriteSchema = z.object({
@@ -35,6 +36,9 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
   }
   const svc = await getBiOperationsService();
-  const report = svc.upsertReport(parsed.data);
+  const report = svc.upsertReport({
+    ...parsed.data,
+    isDeleted: parsed.data.isDeleted ?? false,
+  });
   return NextResponse.json({ report }, { status: 200 });
 }

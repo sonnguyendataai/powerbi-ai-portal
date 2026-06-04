@@ -43,9 +43,12 @@ Workflow:
 - `POST /api/embed/token` succeeds for a test tenant/report.
 - `POST /api/chat` returns answer and evidence.
 - `GET /api/admin/users` requires valid `x-admin-api-key`.
+- `POST /api/admin/sync` creates a run and returns `runId`.
+- `GET /api/admin/sync/runs` and `GET /api/admin/sync/runs/:runId` return history and delta.
 
 ## 5) BI operations persistence notes
 
 - The admin operations store persists snapshots on every mutation.
 - If `DATABASE_URL` is set, snapshots are loaded/saved to Postgres table `bi_ops_snapshots`.
 - File persistence at `BI_OPS_STORE_FILE` remains a fallback and is useful for local development.
+- Sync runs and per-entity delta are stored in the same snapshot (`syncRuns`, `syncDeltaItems`).

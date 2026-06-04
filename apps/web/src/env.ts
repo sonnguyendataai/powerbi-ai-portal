@@ -6,6 +6,8 @@ const schema = z.object({
   POWERBI_CLIENT_ID: z.string().min(1).optional(),
   POWERBI_CLIENT_SECRET: z.string().min(1).optional(),
   POWERBI_API_BASE_URL: z.string().url().optional(),
+  ANTHROPIC_API_KEY: z.string().startsWith("sk-ant-").optional(),
+  ANTHROPIC_MODEL: z.string().min(1).default("claude-3-5-sonnet-latest"),
   PORTAL_ADMIN_API_KEY: z.string().min(16).optional(),
   BI_OPS_STORE_FILE: z.string().min(1).default("./data/bi-ops.json"),
   DATABASE_URL: z.string().url().optional(),

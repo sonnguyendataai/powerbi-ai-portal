@@ -21,6 +21,11 @@ export const biPageSchema = z.object({
   reportId: z.string().min(1),
   name: z.string().min(1),
   displayName: z.string().min(1),
+  sourceBiId: z.string().min(1).optional(),
+  sourceUpdatedAt: z.string().min(1).optional(),
+  lastSeenAt: z.string().min(1).optional(),
+  isDeleted: z.boolean().default(false),
+  contentHash: z.string().min(1).optional(),
 });
 export type BiPage = z.infer<typeof biPageSchema>;
 
@@ -32,8 +37,37 @@ export const biReportSchema = z.object({
   displayName: z.string().min(1),
   embedUrl: z.string().url().or(z.string().startsWith("https://")),
   pageIds: z.array(z.string().min(1)),
+  sourceBiId: z.string().min(1).optional(),
+  sourceUpdatedAt: z.string().min(1).optional(),
+  lastSeenAt: z.string().min(1).optional(),
+  isDeleted: z.boolean().default(false),
+  contentHash: z.string().min(1).optional(),
 });
 export type BiReport = z.infer<typeof biReportSchema>;
+
+export const biDatasetSchema = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  name: z.string().min(1),
+  sourceBiId: z.string().min(1),
+  sourceUpdatedAt: z.string().min(1).optional(),
+  lastSeenAt: z.string().min(1).optional(),
+  isDeleted: z.boolean().default(false),
+  contentHash: z.string().min(1).optional(),
+});
+export type BiDataset = z.infer<typeof biDatasetSchema>;
+
+export const biWorkspaceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  displayName: z.string().min(1),
+  sourceBiId: z.string().min(1),
+  sourceUpdatedAt: z.string().min(1).optional(),
+  lastSeenAt: z.string().min(1).optional(),
+  isDeleted: z.boolean().default(false),
+  contentHash: z.string().min(1).optional(),
+});
+export type BiWorkspace = z.infer<typeof biWorkspaceSchema>;
 
 export const biUserSchema = z.object({
   id: z.string().min(1),
@@ -61,4 +95,46 @@ export interface UserExportRecord {
   roleNames: string[];
   reportNames: string[];
   customFields: Record<string, string>;
+}
+
+export type SyncScopeMode = "full" | "workspace";
+export type SyncStatus = "running" | "succeeded" | "failed";
+export type SyncEntityType = "workspace" | "dataset" | "report" | "page";
+export type SyncChangeType = "added" | "updated" | "removed";
+
+export interface SyncSummaryCounts {
+  added: number;
+  updated: number;
+  removed: number;
+}
+
+export interface SyncRun {
+  id: string;
+  mode: SyncScopeMode;
+  workspaceId?: string | undefined;
+  dryRun: boolean;
+  status: SyncStatus;
+  startedAt: string;
+  finishedAt?: string | undefined;
+  triggeredBy: string;
+  error?: string | undefined;
+  summaryCounts: SyncSummaryCounts;
+}
+
+export interface SyncDeltaItem {
+  runId: string;
+  entityType: SyncEntityType;
+  entityId: string;
+  workspaceId?: string | undefined;
+  changeType: SyncChangeType;
+  beforeHash?: string | undefined;
+  afterHash?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface SyncRequest {
+  mode: SyncScopeMode;
+  workspaceId?: string | undefined;
+  dryRun?: boolean | undefined;
+  triggeredBy: string;
 }

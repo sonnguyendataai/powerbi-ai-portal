@@ -34,6 +34,10 @@ pnpm test
   - user/role/report/page/rule permission assignments
   - favorite report handling
   - user import/export for enterprise onboarding
+- Power BI metadata sync center:
+  - full tenant/workspace scoped sync
+  - sync run history and delta tracking (added/updated/removed)
+  - dry-run mode before applying changes
 
 ## Admin and operations APIs
 
@@ -42,3 +46,13 @@ pnpm test
 - `POST /api/admin/reports` (includes favorite toggle payload)
 - `GET|POST /api/admin/permissions`
 - `GET|POST /api/admin/import-export`
+- `GET|POST /api/admin/sync`
+- `GET /api/admin/sync/[runId]`
+
+## Sync operations
+
+- UI: `/admin/sync`
+- Full sync payload:
+  - `{"mode":"full","dryRun":false,"triggeredBy":"admin-api"}`
+- Workspace sync payload:
+  - `{"mode":"workspace","workspaceId":"<workspace-guid>","dryRun":true,"triggeredBy":"admin-api"}`

@@ -29,15 +29,23 @@
   - embed token issuance
   - AI chat response with evidence
   - admin user/role/report permission APIs
+  - admin sync run (`POST /api/admin/sync`) and run detail retrieval (`GET /api/admin/sync/runs/:runId`)
 
 ## 5) Post-release monitoring
 
 - Track 5xx rates on `/api/chat`, `/api/embed/token`, `/api/admin/*`.
 - Track p95 latency for chat and embed token routes.
 - Track rate-limit hit ratios for anomaly detection.
+- Track sync outcome ratio (`succeeded/failed`) and delta volume trend for metadata drift detection.
 
 ## 6) Vercel specifics
 
 - Confirm GitHub Actions has `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 - Verify `vercel.json` build/install commands are in effect.
 - For file-backed BI ops store in serverless mode, use `/tmp/bi-ops.json` or move to managed DB.
+
+## 7) Sync operations checklist
+
+- Use `/admin/sync` for manual trigger in emergency runbook flows.
+- Run one dry-run sync before enabling scheduled sync jobs.
+- Keep `triggeredBy` field consistent (`admin-api`, `sync-center`, or scheduler ID) for audit clarity.

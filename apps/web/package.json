@@ -12,6 +12,7 @@
     "lint": "echo lint-ok"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
     "@portal/agent-core": "workspace:*",
     "@portal/agent-service": "workspace:*",
     "@portal/bi-operations": "workspace:*",
