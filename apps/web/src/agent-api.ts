@@ -3,6 +3,8 @@ import { FABRIC_CORE_TOOLS, POWERBI_MCP_READ_TOOLS } from "@portal/mcp-tools";
 import { runRuntimeQuery } from "@portal/agent-service";
 import type { SessionUser } from "./auth";
 import { buildResource } from "./auth";
+import { loadEnv } from "./env";
+import { generateAnthropicAnswer } from "./llm-anthropic";
 
 export interface ChatAnswer {
   answer: string;
@@ -11,6 +13,7 @@ export interface ChatAnswer {
 }
 
 export async function answerDataQuestion(user: SessionUser, question: string): Promise<ChatAnswer> {
+  const env = loadEnv(process.env);
   const policy = new PolicyEngine();
   const resource = buildResource(user.tenantId, "semantic-model", "default");
   const decision = policy.evaluate({
@@ -57,9 +60,27 @@ export async function answerDataQuestion(user: SessionUser, question: string): P
       "DAX query executed via execute_dax_query",
       "Catalog metadata validated using Fabric search",
     ];
-  return {
-    answer: runtime.answer || `Planned answer for: "${question}".`,
-    evidence,
-    usedTools: toolPlan,
-  };
+  let answer = runtime.answer || `Planned answer for: "${question}".`;
+  if (env.ANTHROPIC_API_KEY) {
+    try {
+      answer = await generateAnthropicAnswer({
+        apiKey: env.ANTHROPIC_API_KEY,
+        model: env.ANTHROPIC_MODEL,
+        tenantId: user.tenantId,
+        question,
+        intent: runtime.answer.startsWith("Intent=")
+          ? runtime.answer.split(".")[0]?.replace("Intent=", "").trim() ?? "lookup"
+          : "lookup",
+        evidence,
+      });
+    } catch (error) {
+      emitAudit({
+        kind: "agent.query.llm_error",
+        userId: user.userId,
+        tenantId: user.tenantId,
+        metadata: { message: error instanceof Error ? error.message : "anthropic_error" },
+      });
+    }
+  }
+  return { answer, evidence, usedTools: toolPlan };
 }
