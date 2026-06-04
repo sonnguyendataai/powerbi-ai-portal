@@ -1,10 +1,14 @@
 import type {
+  BiDataset,
   BiPage,
   BiReport,
   BiRole,
   BiRule,
   BiUser,
+  BiWorkspace,
   FavoriteReport,
+  SyncDeltaItem,
+  SyncRun,
   UserPermission,
 } from "./types";
 
@@ -14,8 +18,12 @@ export interface BiOpsStore {
   rules: Map<string, BiRule>;
   reports: Map<string, BiReport>;
   pages: Map<string, BiPage>;
+  datasets: Map<string, BiDataset>;
+  workspaces: Map<string, BiWorkspace>;
   permissions: UserPermission[];
   favorites: FavoriteReport[];
+  syncRuns: SyncRun[];
+  syncDeltaItems: SyncDeltaItem[];
 }
 
 export interface BiOpsStoreSnapshot {
@@ -24,8 +32,12 @@ export interface BiOpsStoreSnapshot {
   rules: BiRule[];
   reports: BiReport[];
   pages: BiPage[];
+  datasets: BiDataset[];
+  workspaces: BiWorkspace[];
   permissions: UserPermission[];
   favorites: FavoriteReport[];
+  syncRuns: SyncRun[];
+  syncDeltaItems: SyncDeltaItem[];
 }
 
 export function createBiOpsStore(seed?: Partial<BiOpsStoreSnapshot>): BiOpsStore {
@@ -45,16 +57,45 @@ export function createBiOpsStore(seed?: Partial<BiOpsStoreSnapshot>): BiOpsStore
         displayName: "Sales Overview",
         embedUrl: "https://app.powerbi.com/reportEmbed?reportId=report-sales",
         pageIds: ["page-sales-main"],
+        isDeleted: false,
       },
     ],
   ]);
   const pages = new Map<string, BiPage>([
-    [{ id: "page-sales-main", reportId: "report-sales", name: "Main", displayName: "Main" }.id, {
-      id: "page-sales-main",
-      reportId: "report-sales",
-      name: "Main",
-      displayName: "Main",
-    }],
+    [
+      "page-sales-main",
+      {
+        id: "page-sales-main",
+        reportId: "report-sales",
+        name: "Main",
+        displayName: "Main",
+        isDeleted: false,
+      },
+    ],
+  ]);
+  const datasets = new Map<string, BiDataset>([
+    [
+      "dataset-sales",
+      {
+        id: "dataset-sales",
+        workspaceId: "ws-main",
+        name: "Sales Model",
+        sourceBiId: "dataset-sales",
+        isDeleted: false,
+      },
+    ],
+  ]);
+  const workspaces = new Map<string, BiWorkspace>([
+    [
+      "ws-main",
+      {
+        id: "ws-main",
+        name: "Main Workspace",
+        displayName: "Main Workspace",
+        sourceBiId: "ws-main",
+        isDeleted: false,
+      },
+    ],
   ]);
   const rules = new Map<string, BiRule>([
     [
@@ -84,6 +125,12 @@ export function createBiOpsStore(seed?: Partial<BiOpsStoreSnapshot>): BiOpsStore
   if (seed?.pages) {
     for (const page of seed.pages) pages.set(page.id, page);
   }
+  if (seed?.datasets) {
+    for (const dataset of seed.datasets) datasets.set(dataset.id, dataset);
+  }
+  if (seed?.workspaces) {
+    for (const workspace of seed.workspaces) workspaces.set(workspace.id, workspace);
+  }
   if (seed?.rules) {
     for (const rule of seed.rules) rules.set(rule.id, rule);
   }
@@ -97,8 +144,12 @@ export function createBiOpsStore(seed?: Partial<BiOpsStoreSnapshot>): BiOpsStore
     rules,
     reports,
     pages,
+    datasets,
+    workspaces,
     permissions: seed?.permissions ? [...seed.permissions] : [],
     favorites: seed?.favorites ? [...seed.favorites] : [],
+    syncRuns: seed?.syncRuns ? [...seed.syncRuns] : [],
+    syncDeltaItems: seed?.syncDeltaItems ? [...seed.syncDeltaItems] : [],
   };
 }
 
@@ -109,7 +160,11 @@ export function toSnapshot(store: BiOpsStore): BiOpsStoreSnapshot {
     rules: [...store.rules.values()],
     reports: [...store.reports.values()],
     pages: [...store.pages.values()],
+    datasets: [...store.datasets.values()],
+    workspaces: [...store.workspaces.values()],
     permissions: [...store.permissions],
     favorites: [...store.favorites],
+    syncRuns: [...store.syncRuns],
+    syncDeltaItems: [...store.syncDeltaItems],
   };
 }

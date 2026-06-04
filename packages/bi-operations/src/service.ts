@@ -1,14 +1,24 @@
 import {
+  biDatasetSchema,
   biPageSchema,
   biReportSchema,
   biRoleSchema,
   biRuleSchema,
   biUserSchema,
+  biWorkspaceSchema,
+  type BiDataset,
   type BiPage,
   type BiReport,
   type BiRole,
   type BiRule,
   type BiUser,
+  type BiWorkspace,
+  type SyncChangeType,
+  type SyncDeltaItem,
+  type SyncEntityType,
+  type SyncRun,
+  type SyncScopeMode,
+  type SyncSummaryCounts,
   type UserExportRecord,
   type UserPermission,
 } from "./types";
@@ -56,6 +66,18 @@ export class BiOperationsService {
       .filter((report): report is BiReport => !!report);
   }
 
+  listReports(): BiReport[] {
+    return [...this.store.reports.values()];
+  }
+
+  listPages(): BiPage[] {
+    return [...this.store.pages.values()];
+  }
+
+  listDatasets(): BiDataset[] {
+    return [...this.store.datasets.values()];
+  }
+
   upsertReport(report: BiReport): BiReport {
     const parsed = biReportSchema.parse(report);
     this.store.reports.set(parsed.id, parsed);
@@ -75,6 +97,79 @@ export class BiOperationsService {
     this.store.rules.set(parsed.id, parsed);
     this.persist();
     return parsed;
+  }
+
+  upsertDataset(dataset: BiDataset): BiDataset {
+    const parsed = biDatasetSchema.parse(dataset);
+    this.store.datasets.set(parsed.id, parsed);
+    this.persist();
+    return parsed;
+  }
+
+  listSyncRuns(): SyncRun[] {
+    return [...this.store.syncRuns].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+
+  listWorkspaces(): BiWorkspace[] {
+    return [...this.store.workspaces.values()].filter((workspace) => !workspace.isDeleted);
+  }
+
+  upsertWorkspace(workspace: BiWorkspace): BiWorkspace {
+    const parsed = biWorkspaceSchema.parse(workspace);
+    this.store.workspaces.set(parsed.id, parsed);
+    this.persist();
+    return parsed;
+  }
+
+  getSyncRun(runId: string): SyncRun | undefined {
+    return this.store.syncRuns.find((run) => run.id === runId);
+  }
+
+  listSyncDeltaItems(runId: string): SyncDeltaItem[] {
+    return this.store.syncDeltaItems.filter((item) => item.runId === runId);
+  }
+
+  startSyncRun(input: {
+    mode: SyncScopeMode;
+    workspaceId?: string | undefined;
+    dryRun: boolean;
+    triggeredBy: string;
+  }): SyncRun {
+    const run: SyncRun = {
+      id: createSyncRunId(),
+      mode: input.mode,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+      dryRun: input.dryRun,
+      status: "running",
+      startedAt: new Date().toISOString(),
+      triggeredBy: input.triggeredBy,
+      summaryCounts: { added: 0, updated: 0, removed: 0 },
+    };
+    this.store.syncRuns.push(run);
+    this.persist();
+    return run;
+  }
+
+  appendSyncDeltaItems(runId: string, items: SyncDeltaItem[]): SyncSummaryCounts {
+    this.store.syncDeltaItems = this.store.syncDeltaItems.filter((item) => item.runId !== runId);
+    this.store.syncDeltaItems.push(...items);
+    const summary = summarizeDelta(items);
+    const run = this.store.syncRuns.find((entry) => entry.id === runId);
+    if (run) {
+      run.summaryCounts = summary;
+    }
+    this.persist();
+    return summary;
+  }
+
+  finishSyncRun(runId: string, input: { status: "succeeded" | "failed"; error?: string }): SyncRun | undefined {
+    const run = this.store.syncRuns.find((entry) => entry.id === runId);
+    if (!run) return undefined;
+    run.status = input.status;
+    run.finishedAt = new Date().toISOString();
+    if (input.error) run.error = input.error;
+    this.persist();
+    return run;
   }
 
   assignPermission(permission: UserPermission): UserPermission {
@@ -126,4 +221,40 @@ export class BiOperationsService {
   private persist(): void {
     this.options.onMutate?.(toSnapshot(this.store));
   }
+}
+
+function summarizeDelta(items: SyncDeltaItem[]): SyncSummaryCounts {
+  const summary: SyncSummaryCounts = { added: 0, updated: 0, removed: 0 };
+  for (const item of items) {
+    if (item.changeType === "added") summary.added += 1;
+    else if (item.changeType === "updated") summary.updated += 1;
+    else if (item.changeType === "removed") summary.removed += 1;
+  }
+  return summary;
+}
+
+export function buildSyncDeltaItem(input: {
+  runId: string;
+  entityType: SyncEntityType;
+  entityId: string;
+  workspaceId?: string;
+  changeType: SyncChangeType;
+  beforeHash?: string | undefined;
+  afterHash?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}): SyncDeltaItem {
+  return {
+    runId: input.runId,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    changeType: input.changeType,
+    ...(input.beforeHash ? { beforeHash: input.beforeHash } : {}),
+    ...(input.afterHash ? { afterHash: input.afterHash } : {}),
+    ...(input.metadata ? { metadata: input.metadata } : {}),
+  };
+}
+
+function createSyncRunId(): string {
+  return `sync_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }

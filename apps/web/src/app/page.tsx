@@ -23,7 +23,17 @@ export default function HomePage() {
           <li><code>POST /api/admin/reports</code></li>
           <li><code>GET|POST /api/admin/permissions</code></li>
           <li><code>GET|POST /api/admin/import-export</code></li>
+          <li><code>GET|POST /api/admin/sync</code></li>
+          <li><code>GET /api/admin/sync/runs</code></li>
+          <li><code>GET /api/admin/sync/runs/[runId]</code></li>
         </ul>
+      </section>
+
+      <section style={{ marginTop: 24 }}>
+        <h2>Admin Console</h2>
+        <p>
+          Manage Power BI metadata sync at <a href="/admin/sync"><code>/admin/sync</code></a>.
+        </p>
       </section>
 
       <section style={{ marginTop: 24 }}>

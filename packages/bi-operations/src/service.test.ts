@@ -35,4 +35,31 @@ describe("BiOperationsService", () => {
     });
     expect(snapshots.length).toBe(1);
   });
+
+  it("tracks sync runs and delta items", () => {
+    const svc = new BiOperationsService();
+    const run = svc.startSyncRun({
+      mode: "full",
+      dryRun: true,
+      triggeredBy: "test",
+    });
+    svc.appendSyncDeltaItems(run.id, [
+      {
+        runId: run.id,
+        entityType: "report",
+        entityId: "report-1",
+        changeType: "added",
+      },
+      {
+        runId: run.id,
+        entityType: "page",
+        entityId: "page-1",
+        changeType: "updated",
+      },
+    ]);
+    const finished = svc.finishSyncRun(run.id, { status: "succeeded" });
+    expect(finished?.status).toBe("succeeded");
+    expect(finished?.summaryCounts).toEqual({ added: 1, updated: 1, removed: 0 });
+    expect(svc.listSyncDeltaItems(run.id)).toHaveLength(2);
+  });
 });
