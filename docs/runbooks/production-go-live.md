@@ -42,7 +42,8 @@
 
 - Confirm GitHub Actions has `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 - Verify `vercel.json` build/install commands are in effect.
-- For file-backed BI ops store in serverless mode, use `/tmp/bi-ops.json` or move to managed DB.
+- For Supabase/Postgres mode, verify normalized `bi_ops_*` tables exist after first boot.
+- For file-backed fallback in serverless mode, use `/tmp/bi-ops.json`.
 
 ## 7) Sync operations checklist
 

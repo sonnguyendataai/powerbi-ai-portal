@@ -16,13 +16,16 @@ pnpm test
   - `APP_ENV=prod`
   - `POWERBI_TENANT_ID`, `POWERBI_CLIENT_ID`, `POWERBI_CLIENT_SECRET`
   - `PORTAL_ADMIN_API_KEY`
+  - Database: `DATABASE_URL` or Vercel Supabase-provided `POSTGRES_URL` / `POSTGRES_URL_NON_POOLING`
 - Readiness probes:
   - `GET /api/health`
   - `GET /api/ready`
 - CI quality gates run typecheck, tests, and web build in `.github/workflows/ci.yml`.
 - Vercel deployment workflow is available in `.github/workflows/vercel-deploy.yml`.
 - Vercel setup guide: `docs/runbooks/vercel-deployment.md`.
-- BI admin operations persist snapshots to Postgres when `DATABASE_URL` is configured, with file fallback via `BI_OPS_STORE_FILE`.
+- BI admin operations persist to normalized Postgres tables when `DATABASE_URL` is configured.
+- First boot with DB enabled auto-migrates legacy `bi_ops_snapshots` payload into normalized tables.
+- File fallback via `BI_OPS_STORE_FILE` remains available for local/ephemeral runs.
 
 ## Core capabilities
 
@@ -47,7 +50,7 @@ pnpm test
 - `GET|POST /api/admin/permissions`
 - `GET|POST /api/admin/import-export`
 - `GET|POST /api/admin/sync`
-- `GET /api/admin/sync/[runId]`
+- `GET /api/admin/sync/runs/[runId]`
 
 ## Sync operations
 

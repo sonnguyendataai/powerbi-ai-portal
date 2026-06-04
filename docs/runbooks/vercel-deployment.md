@@ -48,7 +48,8 @@ Workflow:
 
 ## 5) BI operations persistence notes
 
-- The admin operations store persists snapshots on every mutation.
-- If `DATABASE_URL` is set, snapshots are loaded/saved to Postgres table `bi_ops_snapshots`.
+- The admin operations store persists state on every mutation.
+- If `DATABASE_URL` is set, the app uses normalized Postgres tables (`bi_ops_*`) as the primary store.
+- On first startup, the app auto-migrates legacy `bi_ops_snapshots` payload into normalized tables.
 - File persistence at `BI_OPS_STORE_FILE` remains a fallback and is useful for local development.
-- Sync runs and per-entity delta are stored in the same snapshot (`syncRuns`, `syncDeltaItems`).
+- Sync runs and per-entity delta are persisted in `bi_ops_sync_runs` and `bi_ops_sync_delta_items`.
