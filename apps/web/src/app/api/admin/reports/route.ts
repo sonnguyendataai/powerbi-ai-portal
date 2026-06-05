@@ -42,3 +42,18 @@ export async function POST(req: Request): Promise<Response> {
   });
   return NextResponse.json({ report }, { status: 200 });
 }
+
+export async function GET(req: Request): Promise<Response> {
+  const denied = requireAdminApiKey(req);
+  if (denied) return denied;
+  const url = new URL(req.url);
+  const userId = url.searchParams.get("userId");
+  const svc = await getBiOperationsService();
+  if (userId) {
+    return NextResponse.json({
+      reports: svc.listReportsForUser(userId),
+      favorites: svc.listFavorites(userId),
+    });
+  }
+  return NextResponse.json({ reports: svc.listReports() });
+}

@@ -10,25 +10,26 @@ const schema = z.object({
 });
 
 export async function POST(req: Request): Promise<Response> {
-  const user = resolveSessionUser(req);
-  const env = loadEnv(process.env);
-  const rate = checkRateLimit(
-    `chat:${user.tenantId}:${user.userId}`,
-    env.CHAT_RATE_LIMIT_PER_MIN,
-    60_000,
-  );
-  if (!rate.allowed) {
-    return NextResponse.json(
-      { error: "rate_limited", retryAfterSeconds: rate.retryAfterSeconds ?? 60 },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds ?? 60) } },
-    );
-  }
-  const json = await req.json().catch(() => null);
-  const parsed = schema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
-  }
   try {
+    const user = resolveSessionUser(req);
+    const env = loadEnv(process.env);
+    const rate = await checkRateLimit(
+      `chat:${user.tenantId}:${user.userId}`,
+      env.CHAT_RATE_LIMIT_PER_MIN,
+      60_000,
+      env.DATABASE_URL,
+    );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "rate_limited", retryAfterSeconds: rate.retryAfterSeconds ?? 60 },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds ?? 60) } },
+      );
+    }
+    const json = await req.json().catch(() => null);
+    const parsed = schema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
+    }
     const result = await postChat(user, parsed.data.message);
     return NextResponse.json(result, { status: 200 });
   } catch (error) {

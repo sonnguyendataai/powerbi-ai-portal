@@ -1,10 +1,19 @@
 import { loadEnv } from "@/env";
 import { timingSafeEqual } from "node:crypto";
+import { resolveSessionUser } from "@/app/api/_lib/session";
 
 export function requireAdminApiKey(req: Request): Response | null {
   const env = loadEnv(process.env);
   const configuredKey = process.env.PORTAL_ADMIN_API_KEY ?? "";
   const provided = req.headers.get("x-admin-api-key") ?? "";
+  try {
+    const user = resolveSessionUser(req);
+    if (user.roles.includes("portal-admin")) {
+      return null;
+    }
+  } catch {
+    // ignore and continue with API key checks
+  }
 
   if (env.APP_ENV === "prod" && !configuredKey) {
     return new Response(JSON.stringify({ error: "admin_api_key_not_configured" }), {
