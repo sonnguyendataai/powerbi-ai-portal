@@ -49,6 +49,10 @@ export class BiOperationsService {
     return [...this.store.roles.values()];
   }
 
+  listRules(): BiRule[] {
+    return [...this.store.rules.values()];
+  }
+
   upsertRole(role: BiRole): BiRole {
     const parsed = biRoleSchema.parse(role);
     this.store.roles.set(parsed.id, parsed);
@@ -201,6 +205,10 @@ export class BiOperationsService {
     this.store.favorites.push({ userId, reportId });
     this.persist();
     return { reportId, isFavorite: true };
+  }
+
+  listFavorites(userId: string): string[] {
+    return this.store.favorites.filter((fav) => fav.userId === userId).map((fav) => fav.reportId);
   }
 
   exportUsers(): UserExportRecord[] {

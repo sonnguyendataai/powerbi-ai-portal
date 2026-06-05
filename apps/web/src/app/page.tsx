@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const sampleEmbedPayload = {
   reportId: "00000000-0000-0000-0000-000000000000",
   workspaceId: "00000000-0000-0000-0000-000000000000",
@@ -10,6 +12,17 @@ export default function HomePage() {
     <main style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
       <h1 style={{ marginTop: 0 }}>Power BI AI Portal Enterprise</h1>
       <p>App-owns-data portal with policy-governed embedding, AI Q&A, and chart automation.</p>
+      <section style={{ marginTop: 16, padding: 12, border: "1px solid #2a355e", borderRadius: 8 }}>
+        <h2 style={{ marginTop: 0 }}>Production Navigation</h2>
+        <ul>
+          <li><Link href="/t/tenant-default/dashboard">Tenant Dashboard</Link></li>
+          <li><Link href="/t/tenant-default/reports">Tenant Reports</Link></li>
+          <li><Link href="/t/tenant-default/agent">AI Agent</Link></li>
+          <li><Link href="/t/tenant-default/data-prep">Data Prep</Link></li>
+          <li><Link href="/t/tenant-default/chart-studio">Chart Studio</Link></li>
+          <li><Link href="/admin">Admin Console</Link></li>
+        </ul>
+      </section>
 
       <section style={{ marginTop: 24 }}>
         <h2>Available API Endpoints</h2>
@@ -23,9 +36,12 @@ export default function HomePage() {
           <li><code>POST /api/admin/reports</code></li>
           <li><code>GET|POST /api/admin/permissions</code></li>
           <li><code>GET|POST /api/admin/import-export</code></li>
+          <li><code>GET|POST /api/admin/rules</code></li>
+          <li><code>GET /api/admin/audit</code></li>
           <li><code>GET|POST /api/admin/sync</code></li>
           <li><code>GET /api/admin/sync/runs</code></li>
           <li><code>GET /api/admin/sync/runs/[runId]</code></li>
+          <li><code>POST /api/auth/session</code></li>
         </ul>
       </section>
 

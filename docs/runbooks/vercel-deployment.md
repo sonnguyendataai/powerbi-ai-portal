@@ -16,6 +16,7 @@ Set these in Vercel for `Preview` and `Production`:
 - `POWERBI_CLIENT_SECRET`
 - `POWERBI_API_BASE_URL` (default: `https://api.powerbi.com/v1.0/myorg`)
 - `PORTAL_ADMIN_API_KEY`
+- `SESSION_SIGNING_SECRET`
 - `BI_OPS_STORE_FILE` (for ephemeral file mode use `/tmp/bi-ops.json`)
 - `DATABASE_URL` (required for durable multi-instance production state)
 - `CHAT_RATE_LIMIT_PER_MIN`
@@ -45,6 +46,7 @@ Workflow:
 - `GET /api/admin/users` requires valid `x-admin-api-key`.
 - `POST /api/admin/sync` creates a run and returns `runId`.
 - `GET /api/admin/sync/runs` and `GET /api/admin/sync/runs/:runId` return history and delta.
+- `POST /api/auth/session` sets `portal_session` + `portal_tenant` cookies for portal navigation.
 
 ## 5) BI operations persistence notes
 

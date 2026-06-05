@@ -51,10 +51,17 @@ pnpm test
 - `GET|POST /api/admin/import-export`
 - `GET|POST /api/admin/sync`
 - `GET /api/admin/sync/runs/[runId]`
+- `POST /api/auth/session`
 
 ## Sync operations
 
 - UI: `/admin/sync`
+- Tenant portal:
+  - `/t/[tenantSlug]/dashboard`
+  - `/t/[tenantSlug]/reports`
+  - `/t/[tenantSlug]/agent`
+  - `/t/[tenantSlug]/data-prep`
+  - `/t/[tenantSlug]/chart-studio`
 - Full sync payload:
   - `{"mode":"full","dryRun":false,"triggeredBy":"admin-api"}`
 - Workspace sync payload:

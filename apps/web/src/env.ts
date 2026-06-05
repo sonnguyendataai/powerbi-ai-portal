@@ -24,6 +24,7 @@ const schema = z.object({
   SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
   SUPABASE_JWT_SECRET: z.string().min(1).optional(),
+  SESSION_SIGNING_SECRET: z.string().min(24).optional(),
   CHAT_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(20),
   EMBED_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(40),
 });
@@ -48,6 +49,7 @@ export function loadEnv(source: Record<string, string | undefined>): Env {
       normalized.POWERBI_CLIENT_ID ? null : "POWERBI_CLIENT_ID",
       normalized.POWERBI_CLIENT_SECRET ? null : "POWERBI_CLIENT_SECRET",
       normalized.PORTAL_ADMIN_API_KEY ? null : "PORTAL_ADMIN_API_KEY",
+      normalized.SESSION_SIGNING_SECRET ? null : "SESSION_SIGNING_SECRET",
       normalized.DATABASE_URL ? null : "DATABASE_URL|POSTGRES_URL|POSTGRES_URL_NON_POOLING",
     ].filter(Boolean);
     if (missing.length > 0) {
