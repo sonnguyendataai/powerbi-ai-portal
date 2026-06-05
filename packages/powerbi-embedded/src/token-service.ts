@@ -13,6 +13,19 @@ interface AccessTokenState {
 
 const API_BASE = "https://api.powerbi.com/v1.0/myorg";
 
+export class PowerBiEmbedApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly path: string,
+    readonly body: string,
+    readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = "PowerBiEmbedApiError";
+  }
+}
+
 export class PowerBiEmbedTokenService {
   private readonly cfg: PowerBiConfig;
   private cache: AccessTokenState | null = null;
@@ -26,17 +39,18 @@ export class PowerBiEmbedTokenService {
     const accessToken = await this.fetchAccessToken();
     const headers = this.headers(accessToken);
 
-    const reportRes = await fetch(
-      `${API_BASE}/groups/${req.workspaceId}/reports/${req.reportId}`,
-      { headers },
-    );
-    if (!reportRes.ok) throw new Error(`Cannot load report metadata (${reportRes.status})`);
+    const reportPath = `/groups/${req.workspaceId}/reports/${req.reportId}`;
+    const reportRes = await fetch(`${API_BASE}${reportPath}`, { headers });
+    if (!reportRes.ok) {
+      throw await buildPowerBiError("Cannot load report metadata", reportRes, reportPath);
+    }
     const reportJson = await reportRes.json() as { embedUrl?: unknown };
     const embedUrl = typeof reportJson.embedUrl === "string" ? reportJson.embedUrl : "";
     if (!embedUrl) throw new Error("Report metadata missing embedUrl");
 
+    const tokenPath = `/groups/${req.workspaceId}/reports/${req.reportId}/GenerateToken`;
     const tokenRes = await fetch(
-      `${API_BASE}/groups/${req.workspaceId}/reports/${req.reportId}/GenerateToken`,
+      `${API_BASE}${tokenPath}`,
       {
         method: "POST",
         headers,
@@ -47,7 +61,9 @@ export class PowerBiEmbedTokenService {
         }),
       },
     );
-    if (!tokenRes.ok) throw new Error(`Cannot generate embed token (${tokenRes.status})`);
+    if (!tokenRes.ok) {
+      throw await buildPowerBiError("Cannot generate embed token", tokenRes, tokenPath);
+    }
     const tokenJson = await tokenRes.json() as { token?: unknown; expiration?: unknown };
     const embedToken = typeof tokenJson.token === "string" ? tokenJson.token : "";
     const expiresAt = typeof tokenJson.expiration === "string" ? tokenJson.expiration : "";
@@ -96,4 +112,24 @@ export class PowerBiEmbedTokenService {
       "Content-Type": "application/json",
     };
   }
+}
+
+async function buildPowerBiError(prefix: string, res: Response, path: string): Promise<PowerBiEmbedApiError> {
+  const body = await safeReadBody(res);
+  const requestId = res.headers.get("requestid") ?? res.headers.get("x-ms-request-id") ?? undefined;
+  const requestPart = requestId ? ` requestId=${requestId}` : "";
+  const bodyPart = body ? ` body=${truncate(body, 600)}` : "";
+  return new PowerBiEmbedApiError(`${prefix} (${res.status}) on ${path}${requestPart}${bodyPart}`, res.status, path, body, requestId);
+}
+
+async function safeReadBody(res: Response): Promise<string> {
+  try {
+    return await res.text();
+  } catch {
+    return "";
+  }
+}
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}...` : value;
 }

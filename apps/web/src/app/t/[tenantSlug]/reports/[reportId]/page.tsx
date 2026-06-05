@@ -51,13 +51,13 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
         rlsRoles: ["TenantViewer"],
       }),
     });
-    const tokenJson = (await tokenRes.json()) as { token?: string; error?: string };
+    const tokenJson = (await tokenRes.json()) as { embedToken?: string; embedUrl?: string; error?: string };
     if (!tokenRes.ok) {
       setError(tokenJson.error ?? "Cannot create embed token for this report.");
       setLoading(false);
       return;
     }
-    setEmbedToken(tokenJson.token ?? "");
+    setEmbedToken(tokenJson.embedToken ?? "");
     setLoading(false);
   }
 
@@ -83,6 +83,7 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
             <div>
               <span className="badge">Power BI report</span>
               <p className="muted"><code>{report.id}</code></p>
+              <p className="muted">Workspace <code>{report.workspaceId}</code> · Dataset <code>{report.datasetId}</code></p>
             </div>
             <span className="badge">{embedToken ? "Token ready" : "Token pending"}</span>
           </div>
