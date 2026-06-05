@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Alert, PageHeader, Surface } from "@/components/ui";
 
 export default function AdminImportExportPage() {
   const [jsonText, setJsonText] = useState("[]");
@@ -37,15 +38,18 @@ export default function AdminImportExportPage() {
 
   return (
     <section>
-      <h2>Import / Export Users</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <button onClick={() => void exportUsers()}>Export</button>
-        <button onClick={() => void importUsers()}>Import</button>
-      </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <textarea value={jsonText} onChange={(e) => setJsonText(e.target.value)} style={{ minHeight: 220 }} />
-        <textarea value={exported} readOnly style={{ minHeight: 220 }} />
+      <PageHeader eyebrow="Operations" title="Import / Export" description="Move user configuration in and out of the portal safely." actions={<button onClick={() => void exportUsers()}>Export users</button>} />
+      {error ? <Alert>{error}</Alert> : null}
+      <div className="grid-2">
+        <Surface title="Import payload">
+          <div className="stack">
+            <textarea value={jsonText} onChange={(e) => setJsonText(e.target.value)} style={{ minHeight: 320 }} />
+            <button onClick={() => void importUsers()}>Validate and import</button>
+          </div>
+        </Surface>
+        <Surface title="Export result">
+          <textarea value={exported} readOnly style={{ minHeight: 380 }} />
+        </Surface>
       </div>
     </section>
   );

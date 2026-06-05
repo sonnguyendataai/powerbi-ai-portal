@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface ReportItem {
   id: string;
@@ -24,20 +25,21 @@ export default function AdminReportsPage() {
     setReports(json.reports ?? []);
   }
 
+  useEffect(() => {
+    void loadReports();
+  }, []);
+
   return (
     <section>
-      <h2>Reports</h2>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => void loadReports()}>Load</button>
-      </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      <ul>
-        {reports.map((report) => (
-          <li key={report.id}>
-            {report.displayName} · workspace={report.workspaceId} · dataset={report.datasetId}
-          </li>
-        ))}
-      </ul>
+      <PageHeader eyebrow="Content governance" title="Reports" description="Inspect synced Power BI report metadata." actions={<button onClick={() => void loadReports()}>Refresh</button>} />
+      {error ? <Alert>{error}</Alert> : null}
+      <Surface>
+        {reports.length === 0 ? <EmptyState title="No reports loaded" description="Refresh after running content sync." /> : null}
+        <table className="table">
+          <thead><tr><th>Report</th><th>Workspace</th><th>Dataset</th></tr></thead>
+          <tbody>{reports.map((report) => <tr key={report.id}><td>{report.displayName}</td><td>{report.workspaceId}</td><td>{report.datasetId}</td></tr>)}</tbody>
+        </table>
+      </Surface>
     </section>
   );
 }

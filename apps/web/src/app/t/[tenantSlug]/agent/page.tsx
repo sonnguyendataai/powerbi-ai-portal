@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface ChatResponse {
   answer: string;
@@ -33,23 +34,37 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
 
   return (
     <section>
-      <h2>AI Analyst</h2>
-      <p>Ask natural-language questions and inspect evidence + tools used.</p>
-      <textarea value={question} onChange={(e) => setQuestion(e.target.value)} style={{ width: "100%", minHeight: 100 }} />
-      <div style={{ marginTop: 8 }}>
-        <button onClick={() => void ask()}>Ask</button>
+      <PageHeader
+        eyebrow="AI experience"
+        title="Ask DataMind"
+        description="Ask governed business questions and review evidence, limitations, and tool traces in one workspace."
+      />
+      <div className="workspace-layout">
+        <Surface title="Question">
+          <div className="stack">
+            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} style={{ minHeight: 160 }} />
+            <button onClick={() => void ask()}>Ask AI analyst</button>
+            {error ? <Alert>{error}</Alert> : null}
+          </div>
+        </Surface>
+        <Surface title="Answer and evidence">
+          {answer ? (
+            <div className="stack">
+              <p>{answer.answer}</p>
+              <div>
+                <h4>Evidence</h4>
+                <ul>{answer.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+              </div>
+              <div>
+                <h4>Tool trace</h4>
+                <ul>{answer.usedTools.map((item) => <li key={item}>{item}</li>)}</ul>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title="No answer yet" description="Submit a question to generate an evidence-aware answer." />
+          )}
+        </Surface>
       </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {answer ? (
-        <article style={{ border: "1px solid #2a355e", borderRadius: 8, padding: 12, marginTop: 12 }}>
-          <h3 style={{ marginTop: 0 }}>Answer</h3>
-          <p>{answer.answer}</p>
-          <h4>Evidence</h4>
-          <ul>{answer.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-          <h4>Tool Trace</h4>
-          <ul>{answer.usedTools.map((item) => <li key={item}>{item}</li>)}</ul>
-        </article>
-      ) : null}
     </section>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface RoleItem {
   id: string;
@@ -23,18 +24,21 @@ export default function AdminRolesPage() {
     setRoles(json.roles ?? []);
   }
 
+  useEffect(() => {
+    void loadRoles();
+  }, []);
+
   return (
     <section>
-      <h2>Roles</h2>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => void loadRoles()}>Load</button>
-      </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      <ul>
-        {roles.map((role) => (
-          <li key={role.id}>{role.name} {role.isRequiredRule ? "(requires rule)" : ""}</li>
-        ))}
-      </ul>
+      <PageHeader eyebrow="Access control" title="Roles" description="Review portal roles and rule requirements." actions={<button onClick={() => void loadRoles()}>Refresh</button>} />
+      {error ? <Alert>{error}</Alert> : null}
+      <Surface>
+        {roles.length === 0 ? <EmptyState title="No roles loaded" description="Refresh to load role definitions." /> : null}
+        <table className="table">
+          <thead><tr><th>Role</th><th>Rule required</th></tr></thead>
+          <tbody>{roles.map((role) => <tr key={role.id}><td>{role.name}</td><td>{role.isRequiredRule ? "Yes" : "No"}</td></tr>)}</tbody>
+        </table>
+      </Surface>
     </section>
   );
 }

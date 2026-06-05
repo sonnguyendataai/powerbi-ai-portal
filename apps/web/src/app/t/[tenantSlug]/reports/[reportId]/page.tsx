@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface ReportRecord {
   id: string;
@@ -19,65 +20,85 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
   const [report, setReport] = useState<ReportRecord | null>(null);
   const [embedToken, setEmbedToken] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  async function loadReport(): Promise<void> {
+  async function loadReportAndToken(): Promise<void> {
+    setLoading(true);
+    setError("");
     const res = await fetch("/api/reports");
     const json = (await res.json()) as { reports?: ReportRecord[] };
     if (!res.ok || !json.reports) {
       setError("Unable to load report.");
+      setLoading(false);
       return;
     }
     const found = json.reports.find((item) => item.id === reportId) ?? null;
     setReport(found);
-    if (!found) setError("Report not found for user.");
-  }
-
-  async function mintEmbedToken(): Promise<void> {
-    if (!report) return;
-    const res = await fetch("/api/embed/token", {
+    if (!found) {
+      setError("Report not found. It may not be synced or assigned to your user.");
+      setLoading(false);
+      return;
+    }
+    const tokenRes = await fetch("/api/embed/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        reportId: report.id,
-        workspaceId: report.workspaceId,
-        datasetId: report.datasetId,
+        reportId: found.id,
+        workspaceId: found.workspaceId,
+        datasetId: found.datasetId,
         rlsRoles: ["TenantViewer"],
       }),
     });
-    const json = (await res.json()) as { token?: string; error?: string };
-    if (!res.ok) {
-      setError(json.error ?? "Failed to mint token.");
+    const tokenJson = (await tokenRes.json()) as { token?: string; error?: string };
+    if (!tokenRes.ok) {
+      setError(tokenJson.error ?? "Cannot create embed token for this report.");
+      setLoading(false);
       return;
     }
-    setEmbedToken(json.token ?? "");
+    setEmbedToken(tokenJson.token ?? "");
+    setLoading(false);
   }
 
   const canRenderIframe = useMemo(() => !!report?.embedUrl && !!embedToken, [report?.embedUrl, embedToken]);
 
+  useEffect(() => {
+    void loadReportAndToken();
+  }, [reportId]);
+
   return (
     <section>
-      <h2>Report Detail</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <button onClick={() => void loadReport()}>Load report</button>
-        <button onClick={() => void mintEmbedToken()} disabled={!report}>Mint embed token</button>
-      </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+      <PageHeader
+        eyebrow="Report workspace"
+        title={report?.displayName ?? "Loading report"}
+        description="Metadata and embed token are prepared automatically when you open this report."
+        actions={<button className="secondary" onClick={() => void loadReportAndToken()}>Retry</button>}
+      />
+      {error ? <Alert>{error}</Alert> : null}
+      {loading ? <div className="empty-state">Preparing report metadata and embed token...</div> : null}
       {report ? (
-        <article style={{ border: "1px solid #2a355e", borderRadius: 8, padding: 12 }}>
-          <h3 style={{ marginTop: 0 }}>{report.displayName}</h3>
-          <p><code>{report.id}</code></p>
+        <Surface>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+            <div>
+              <span className="badge">Power BI report</span>
+              <p className="muted"><code>{report.id}</code></p>
+            </div>
+            <span className="badge">{embedToken ? "Token ready" : "Token pending"}</span>
+          </div>
           {canRenderIframe ? (
             <iframe
               src={report.embedUrl}
               title={`report-${report.id}`}
-              style={{ width: "100%", minHeight: 520, border: "1px solid #2a355e" }}
+              className="report-frame"
             />
           ) : (
-            <p>Mint token to preview embed URL. Token is generated but iframe auth wiring is environment-specific.</p>
+            <EmptyState
+              title="Embed preview is not ready"
+              description="The portal could not complete metadata/token preparation. Check Power BI workspace permissions and synced metadata."
+            />
           )}
-        </article>
+        </Surface>
       ) : null}
     </section>
   );

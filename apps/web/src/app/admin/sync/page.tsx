@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface SyncRun {
   id: string;
@@ -92,39 +93,52 @@ export default function AdminSyncPage() {
   }, []);
 
   return (
-    <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-      <h1>Admin Sync Center</h1>
-      <p>Sync Power BI content and inspect run-level delta history.</p>
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, marginBottom: 16 }}>
-        <button disabled={busy} onClick={() => void triggerSync("full")}>Sync All</button>
-        <select value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)} style={{ marginLeft: 8 }}>
-          <option value="">Select workspace</option>
-          {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.displayName}</option>)}
-        </select>
-        <button disabled={busy || !workspaceId} onClick={() => void triggerSync("workspace")} style={{ marginLeft: 8 }}>
-          Sync Workspace
-        </button>
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h2>Run History</h2>
-          {runs.map((run) => (
-            <div key={run.id} onClick={() => void showRun(run.id)} style={{ cursor: "pointer", padding: "6px 0" }}>
-              {run.id} - {run.mode} - {run.status} ({run.summaryCounts.added}/{run.summaryCounts.updated}/{run.summaryCounts.removed})
-            </div>
-          ))}
+    <section>
+      <PageHeader
+        eyebrow="Operations"
+        title="Power BI Sync Center"
+        description="Sync Power BI workspaces, monitor run status, and inspect added, updated, or removed content."
+        actions={<button disabled={busy} onClick={() => void triggerSync("full")}>{busy ? "Running..." : "Sync all"}</button>}
+      />
+      <Surface>
+        <div className="grid-2">
+          <select value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
+            <option value="">Select workspace</option>
+            {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.displayName}</option>)}
+          </select>
+          <button className="secondary" disabled={busy || !workspaceId} onClick={() => void triggerSync("workspace")}>
+            Sync selected workspace
+          </button>
         </div>
-        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h2>Delta Detail</h2>
-          <p>{selectedRun ? `Run ${selectedRun.id}` : "Choose a run."}</p>
-          {delta.map((item) => (
-            <div key={`${item.runId}-${item.entityType}-${item.entityId}`}>
-              {item.changeType} {item.entityType} {item.entityId}
-            </div>
-          ))}
-        </div>
+        {error ? <Alert>{error}</Alert> : null}
+      </Surface>
+      <div className="grid-2" style={{ marginTop: 18 }}>
+        <Surface title="Run history">
+          {runs.length === 0 ? <EmptyState title="No sync runs yet" description="Run a sync to start tracking Power BI content changes." /> : null}
+          <table className="table">
+            <tbody>
+              {runs.map((run) => (
+                <tr key={run.id} onClick={() => void showRun(run.id)} style={{ cursor: "pointer" }}>
+                  <td><span className="badge">{run.status}</span></td>
+                  <td>{run.mode}</td>
+                  <td>{run.summaryCounts.added}/{run.summaryCounts.updated}/{run.summaryCounts.removed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Surface>
+        <Surface title="Delta detail">
+          <p className="muted">{selectedRun ? `Run ${selectedRun.id}` : "Choose a run to inspect delta detail."}</p>
+          {delta.length === 0 ? <EmptyState title="No delta selected" description="Select a sync run to review changed content." /> : null}
+          <div className="stack">
+            {delta.map((item) => (
+              <div className="card" key={`${item.runId}-${item.entityType}-${item.entityId}`}>
+                <span className="badge">{item.changeType}</span> {item.entityType} <code>{item.entityId}</code>
+              </div>
+            ))}
+          </div>
+        </Surface>
       </div>
-    </main>
+    </section>
   );
 }

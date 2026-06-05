@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface ChartResponse {
   chartType: string;
@@ -34,18 +35,27 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
 
   return (
     <section>
-      <h2>Chart Studio</h2>
-      <p>Convert business questions into chart specs and validate before publish.</p>
-      <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} style={{ width: "100%", minHeight: 100 }} />
-      <div style={{ marginTop: 8 }}>
-        <button onClick={() => void generateChart()}>Generate chart spec</button>
+      <PageHeader
+        eyebrow="Visual analytics"
+        title="Chart Studio"
+        description="Turn business questions into chart specifications and review the generated structure before publishing."
+      />
+      <div className="workspace-layout">
+        <Surface title="Prompt">
+          <div className="stack">
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} style={{ minHeight: 180 }} />
+            <button onClick={() => void generateChart()}>Generate chart spec</button>
+            {error ? <Alert>{error}</Alert> : null}
+          </div>
+        </Surface>
+        <Surface title="Generated spec">
+          {spec ? (
+            <pre>{JSON.stringify(spec, null, 2)}</pre>
+          ) : (
+            <EmptyState title="No chart spec yet" description="Generate a chart spec to inspect fields, title, and visualization type." />
+          )}
+        </Surface>
       </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {spec ? (
-        <pre style={{ marginTop: 12, background: "#101832", padding: 12, borderRadius: 8 }}>
-          {JSON.stringify(spec, null, 2)}
-        </pre>
-      ) : null}
     </section>
   );
 }
