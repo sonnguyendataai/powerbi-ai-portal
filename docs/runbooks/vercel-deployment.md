@@ -15,13 +15,22 @@ Set these in Vercel for `Preview` and `Production`:
 - `POWERBI_CLIENT_ID`
 - `POWERBI_CLIENT_SECRET`
 - `POWERBI_API_BASE_URL` (default: `https://api.powerbi.com/v1.0/myorg`)
-- `PORTAL_ADMIN_API_KEY`
 - `SESSION_SIGNING_SECRET`
+- `APP_BASE_URL`
 - `BI_OPS_STORE_FILE` (for ephemeral file mode use `/tmp/bi-ops.json`)
 - `DATABASE_URL` (required for durable multi-instance production state)
 - `CHAT_RATE_LIMIT_PER_MIN`
 - `EMBED_RATE_LIMIT_PER_MIN`
-- Optional: `POWERBI_MCP_URL`, `FABRIC_CORE_MCP_URL`
+- Local auth bootstrap:
+  - `LOCAL_AUTH_BOOTSTRAP_USERNAME`
+  - `LOCAL_AUTH_BOOTSTRAP_PASSWORD`
+  - `LOCAL_AUTH_BOOTSTRAP_TENANT_ID`
+- Optional Microsoft AD SSO:
+  - `AZURE_AD_TENANT_ID`
+  - `AZURE_AD_CLIENT_ID`
+  - `AZURE_AD_CLIENT_SECRET`
+  - `AZURE_AD_REDIRECT_URI`
+- Optional MCP endpoints: `POWERBI_MCP_URL`, `FABRIC_CORE_MCP_URL`
 
 ## 3) GitHub Actions secrets
 
@@ -41,12 +50,15 @@ Workflow:
 
 - `GET /api/health` returns `200`.
 - `GET /api/ready` returns `200`.
+- `/login` renders DataMind-branded local login and Microsoft AD SSO entry points.
+- Local admin login succeeds using the bootstrap credentials and redirects to `/t/[tenant]/dashboard`.
+- A `portal-admin` user can access `/admin`; non-admin users are redirected/forbidden.
 - `POST /api/embed/token` succeeds for a test tenant/report.
 - `POST /api/chat` returns answer and evidence.
-- `GET /api/admin/users` requires valid `x-admin-api-key`.
+- `GET /api/admin/users` requires a `portal-admin` session.
 - `POST /api/admin/sync` creates a run and returns `runId`.
 - `GET /api/admin/sync/runs` and `GET /api/admin/sync/runs/:runId` return history and delta.
-- `POST /api/auth/session` sets `portal_session` + `portal_tenant` cookies for portal navigation.
+- `GET /api/admin/sync/diagnostics?workspaceId=...&reportId=...` returns token claims and per-endpoint Power BI REST results.
 
 ## 5) BI operations persistence notes
 
@@ -55,3 +67,4 @@ Workflow:
 - On first startup, the app auto-migrates legacy `bi_ops_snapshots` payload into normalized tables.
 - File persistence at `BI_OPS_STORE_FILE` remains a fallback and is useful for local development.
 - Sync runs and per-entity delta are persisted in `bi_ops_sync_runs` and `bi_ops_sync_delta_items`.
+- Portal auth state is persisted in `portal_users`, `portal_user_credentials`, `portal_user_roles`, and `portal_auth_audit`.
