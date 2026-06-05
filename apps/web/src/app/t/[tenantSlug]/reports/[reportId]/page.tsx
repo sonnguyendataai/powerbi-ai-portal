@@ -16,16 +16,12 @@ interface ReportPageProps {
 
 export default function ReportDetailPage({ params }: ReportPageProps) {
   const { tenantSlug, reportId } = use(params);
-  const [adminKey, setAdminKey] = useState("");
-  const [userId, setUserId] = useState("user@example.com");
   const [report, setReport] = useState<ReportRecord | null>(null);
   const [embedToken, setEmbedToken] = useState("");
   const [error, setError] = useState("");
 
   async function loadReport(): Promise<void> {
-    const res = await fetch(`/api/admin/reports?userId=${encodeURIComponent(userId)}`, {
-      headers: adminKey ? { "x-admin-api-key": adminKey } : {},
-    });
+    const res = await fetch("/api/reports");
     const json = (await res.json()) as { reports?: ReportRecord[] };
     if (!res.ok || !json.reports) {
       setError("Unable to load report.");
@@ -42,9 +38,6 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-tenant-id": tenantSlug,
-        "x-user-id": userId,
-        "x-user-roles": "analyst",
       },
       body: JSON.stringify({
         reportId: report.id,
@@ -67,8 +60,6 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
     <section>
       <h2>Report Detail</h2>
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Admin API key" />
-        <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="User ID" />
         <button onClick={() => void loadReport()}>Load report</button>
         <button onClick={() => void mintEmbedToken()} disabled={!report}>Mint embed token</button>
       </div>

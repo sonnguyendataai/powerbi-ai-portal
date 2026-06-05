@@ -10,15 +10,12 @@ interface PermissionItem {
 }
 
 export default function AdminPermissionsPage() {
-  const [adminKey, setAdminKey] = useState("");
   const [userId, setUserId] = useState("user@example.com");
   const [items, setItems] = useState<PermissionItem[]>([]);
   const [error, setError] = useState("");
 
   async function loadPermissions(): Promise<void> {
-    const res = await fetch(`/api/admin/permissions?userId=${encodeURIComponent(userId)}`, {
-      headers: adminKey ? { "x-admin-api-key": adminKey } : {},
-    });
+    const res = await fetch(`/api/admin/permissions?userId=${encodeURIComponent(userId)}`);
     const json = (await res.json()) as { permissions?: PermissionItem[]; error?: string };
     if (!res.ok) {
       setError(json.error ?? "Failed to load permissions");
@@ -32,7 +29,6 @@ export default function AdminPermissionsPage() {
     <section>
       <h2>Permissions</h2>
       <div style={{ display: "flex", gap: 8 }}>
-        <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Admin API key" />
         <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="User ID" />
         <button onClick={() => void loadPermissions()}>Load</button>
       </div>

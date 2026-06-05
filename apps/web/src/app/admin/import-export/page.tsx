@@ -3,15 +3,12 @@
 import { useState } from "react";
 
 export default function AdminImportExportPage() {
-  const [adminKey, setAdminKey] = useState("");
   const [jsonText, setJsonText] = useState("[]");
   const [exported, setExported] = useState("[]");
   const [error, setError] = useState("");
 
   async function exportUsers(): Promise<void> {
-    const res = await fetch("/api/admin/import-export", {
-      headers: adminKey ? { "x-admin-api-key": adminKey } : {},
-    });
+    const res = await fetch("/api/admin/import-export");
     const json = await res.json() as { exportedUsers?: unknown; error?: string };
     if (!res.ok) {
       setError(json.error ?? "Export failed");
@@ -27,7 +24,6 @@ export default function AdminImportExportPage() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(adminKey ? { "x-admin-api-key": adminKey } : {}),
       },
       body: JSON.stringify(payload),
     });
@@ -43,7 +39,6 @@ export default function AdminImportExportPage() {
     <section>
       <h2>Import / Export Users</h2>
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Admin API key" />
         <button onClick={() => void exportUsers()}>Export</button>
         <button onClick={() => void importUsers()}>Import</button>
       </div>

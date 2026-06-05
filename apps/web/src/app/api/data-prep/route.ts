@@ -9,13 +9,13 @@ const schema = z.object({
 });
 
 export async function POST(req: Request): Promise<Response> {
-  const user = resolveSessionUser(req);
-  const json = await req.json().catch(() => null);
-  const parsed = schema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
-  }
   try {
+    const user = resolveSessionUser(req);
+    const json = await req.json().catch(() => null);
+    const parsed = schema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
+    }
     const plan = postDataPrep(user, parsed.data);
     return NextResponse.json(plan, { status: 200 });
   } catch (error) {

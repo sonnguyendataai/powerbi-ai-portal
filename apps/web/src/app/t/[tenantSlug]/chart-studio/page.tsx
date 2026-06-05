@@ -10,7 +10,7 @@ interface ChartResponse {
 }
 
 export default function TenantChartStudioPage({ params }: { params: Promise<{ tenantSlug: string }> }) {
-  const { tenantSlug } = use(params);
+  use(params);
   const [prompt, setPrompt] = useState("Show monthly sales trend by region");
   const [spec, setSpec] = useState<ChartResponse | null>(null);
   const [error, setError] = useState("");
@@ -21,9 +21,6 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-tenant-id": tenantSlug,
-        "x-user-id": "user@example.com",
-        "x-user-roles": "analyst",
       },
       body: JSON.stringify({ prompt }),
     });

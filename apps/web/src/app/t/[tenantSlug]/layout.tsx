@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { requireServerSession } from "@/session-server";
 
 interface TenantLayoutProps {
   children: ReactNode;
@@ -8,6 +9,7 @@ interface TenantLayoutProps {
 
 export default async function TenantLayout({ children, params }: TenantLayoutProps) {
   const { tenantSlug } = await params;
+  const session = await requireServerSession({ tenantSlug });
   const nav = [
     ["Dashboard", `/t/${tenantSlug}/dashboard`],
     ["Reports", `/t/${tenantSlug}/reports`],
@@ -23,7 +25,12 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
           <h1 style={{ margin: 0 }}>Tenant Portal</h1>
           <p style={{ margin: "4px 0 0", opacity: 0.8 }}>Tenant: <code>{tenantSlug}</code></p>
         </div>
-        <Link href="/admin/sync">Admin</Link>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {session.roles.includes("portal-admin") ? <Link href="/admin">Admin</Link> : null}
+          <form action="/api/auth/logout" method="post">
+            <button type="submit">Logout</button>
+          </form>
+        </div>
       </header>
       <nav style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
         {nav.map(([label, href]) => (

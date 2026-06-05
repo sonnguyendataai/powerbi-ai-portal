@@ -25,6 +25,14 @@ const schema = z.object({
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
   SUPABASE_JWT_SECRET: z.string().min(1).optional(),
   SESSION_SIGNING_SECRET: z.string().min(24).optional(),
+  APP_BASE_URL: z.string().url().optional(),
+  AZURE_AD_TENANT_ID: z.string().min(1).optional(),
+  AZURE_AD_CLIENT_ID: z.string().min(1).optional(),
+  AZURE_AD_CLIENT_SECRET: z.string().min(1).optional(),
+  AZURE_AD_REDIRECT_URI: z.string().url().optional(),
+  LOCAL_AUTH_BOOTSTRAP_USERNAME: z.string().min(1).optional(),
+  LOCAL_AUTH_BOOTSTRAP_PASSWORD: z.string().min(8).optional(),
+  LOCAL_AUTH_BOOTSTRAP_TENANT_ID: z.string().min(1).optional(),
   CHAT_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(20),
   EMBED_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(40),
 });
@@ -48,7 +56,6 @@ export function loadEnv(source: Record<string, string | undefined>): Env {
       normalized.POWERBI_TENANT_ID ? null : "POWERBI_TENANT_ID",
       normalized.POWERBI_CLIENT_ID ? null : "POWERBI_CLIENT_ID",
       normalized.POWERBI_CLIENT_SECRET ? null : "POWERBI_CLIENT_SECRET",
-      normalized.PORTAL_ADMIN_API_KEY ? null : "PORTAL_ADMIN_API_KEY",
       normalized.SESSION_SIGNING_SECRET ? null : "SESSION_SIGNING_SECRET",
       normalized.DATABASE_URL ? null : "DATABASE_URL|POSTGRES_URL|POSTGRES_URL_NON_POOLING",
     ].filter(Boolean);

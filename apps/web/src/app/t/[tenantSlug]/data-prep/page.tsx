@@ -9,7 +9,7 @@ interface PrepResponse {
 }
 
 export default function TenantDataPrepPage({ params }: { params: Promise<{ tenantSlug: string }> }) {
-  const { tenantSlug } = use(params);
+  use(params);
   const [datasetId, setDatasetId] = useState("dataset-sales");
   const [intent, setIntent] = useState("Normalize and aggregate sales by month");
   const [result, setResult] = useState<PrepResponse | null>(null);
@@ -21,9 +21,6 @@ export default function TenantDataPrepPage({ params }: { params: Promise<{ tenan
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-tenant-id": tenantSlug,
-        "x-user-id": "user@example.com",
-        "x-user-roles": "analyst",
       },
       body: JSON.stringify({ datasetId, intent }),
     });
