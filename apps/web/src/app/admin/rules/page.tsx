@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface RuleItem {
   id: string;
@@ -25,18 +26,21 @@ export default function AdminRulesPage() {
     setRules(json.rules ?? []);
   }
 
+  useEffect(() => {
+    void loadRules();
+  }, []);
+
   return (
     <section>
-      <h2>Rules</h2>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => void loadRules()}>Load</button>
-      </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      <ul>
-        {rules.map((rule) => (
-          <li key={rule.id}>{rule.name} · {rule.table}.{rule.column} = {rule.values.join(",")}</li>
-        ))}
-      </ul>
+      <PageHeader eyebrow="Governance" title="Rules" description="Review row-level and business filter rules used by portal permissions." actions={<button onClick={() => void loadRules()}>Refresh</button>} />
+      {error ? <Alert>{error}</Alert> : null}
+      <Surface>
+        {rules.length === 0 ? <EmptyState title="No rules loaded" description="Refresh to inspect current rules." /> : null}
+        <table className="table">
+          <thead><tr><th>Name</th><th>Field</th><th>Values</th></tr></thead>
+          <tbody>{rules.map((rule) => <tr key={rule.id}><td>{rule.name}</td><td>{rule.table}.{rule.column}</td><td>{rule.values.join(", ")}</td></tr>)}</tbody>
+        </table>
+      </Surface>
     </section>
   );
 }

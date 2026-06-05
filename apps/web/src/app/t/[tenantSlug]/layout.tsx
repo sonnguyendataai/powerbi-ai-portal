@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireServerSession } from "@/session-server";
+import { BrandLogo } from "@/components/ui";
 
 interface TenantLayoutProps {
   children: ReactNode;
@@ -19,25 +20,37 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
   ] as const;
 
   return (
-    <main style={{ maxWidth: 1200, margin: "0 auto", padding: 20 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Tenant Portal</h1>
-          <p style={{ margin: "4px 0 0", opacity: 0.8 }}>Tenant: <code>{tenantSlug}</code></p>
+    <main className="app-shell">
+      <aside className="sidebar">
+        <BrandLogo compact />
+        <div className="nav-section">
+          <div className="nav-label">Tenant</div>
+          <span className="badge">{tenantSlug}</span>
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          {session.roles.includes("portal-admin") ? <Link href="/admin">Admin</Link> : null}
+        <nav className="nav-section">
+          <div className="nav-label">Workspace</div>
+          {nav.map(([label, href]) => (
+            <Link className="nav-link" key={href} href={href}>{label}<span>→</span></Link>
+          ))}
+        </nav>
+        <nav className="nav-section">
+          <div className="nav-label">Operations</div>
+          {session.roles.includes("portal-admin") ? <Link className="nav-link" href="/admin">Admin Console<span>→</span></Link> : null}
           <form action="/api/auth/logout" method="post">
-            <button type="submit">Logout</button>
+            <button className="secondary" type="submit" style={{ width: "100%" }}>Logout</button>
           </form>
+        </nav>
+      </aside>
+      <section className="main-panel">
+        <div className="topbar">
+          <div>
+            <div className="eyebrow">DataMind Portal</div>
+            <div className="muted">Signed in as {session.sub}</div>
+          </div>
+          <span className="badge">{session.roles.join(" · ")}</span>
         </div>
-      </header>
-      <nav style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-        {nav.map(([label, href]) => (
-          <Link key={href} href={href}>{label}</Link>
-        ))}
-      </nav>
-      {children}
+        {children}
+      </section>
     </main>
   );
 }

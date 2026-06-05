@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface AuditEvent {
   id: string;
@@ -25,18 +26,21 @@ export default function AdminAuditPage() {
     setEvents(json.events ?? []);
   }
 
+  useEffect(() => {
+    void loadAudit();
+  }, []);
+
   return (
     <section>
-      <h2>Audit</h2>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => void loadAudit()}>Load</button>
-      </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      <ul>
-        {events.map((event) => (
-          <li key={event.id}>{event.at} · {event.actor} · {event.action} · {event.status}</li>
-        ))}
-      </ul>
+      <PageHeader eyebrow="Audit trail" title="Audit" description="Inspect recent administrative and sync operations." actions={<button onClick={() => void loadAudit()}>Refresh</button>} />
+      {error ? <Alert>{error}</Alert> : null}
+      <Surface>
+        {events.length === 0 ? <EmptyState title="No audit events loaded" description="Refresh to load recent operations." /> : null}
+        <table className="table">
+          <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Status</th></tr></thead>
+          <tbody>{events.map((event) => <tr key={event.id}><td>{event.at}</td><td>{event.actor}</td><td>{event.action}</td><td><span className="badge">{event.status}</span></td></tr>)}</tbody>
+        </table>
+      </Surface>
     </section>
   );
 }

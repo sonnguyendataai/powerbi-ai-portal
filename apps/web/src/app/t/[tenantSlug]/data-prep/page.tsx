@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface PrepResponse {
   datasetId: string;
@@ -34,19 +35,28 @@ export default function TenantDataPrepPage({ params }: { params: Promise<{ tenan
 
   return (
     <section>
-      <h2>Data Prep Studio</h2>
-      <p>Generate transformation plans before applying to governed datasets.</p>
-      <div style={{ display: "grid", gap: 8, maxWidth: 700 }}>
-        <input value={datasetId} onChange={(e) => setDatasetId(e.target.value)} placeholder="Dataset ID" />
-        <textarea value={intent} onChange={(e) => setIntent(e.target.value)} style={{ minHeight: 90 }} />
-        <button onClick={() => void generatePlan()}>Generate plan</button>
+      <PageHeader
+        eyebrow="Data tools"
+        title="Data Prep Studio"
+        description="Draft transformation plans for governed datasets before execution."
+      />
+      <div className="workspace-layout">
+        <Surface title="Transform request">
+          <div className="stack">
+            <input value={datasetId} onChange={(e) => setDatasetId(e.target.value)} placeholder="Dataset ID" />
+            <textarea value={intent} onChange={(e) => setIntent(e.target.value)} style={{ minHeight: 160 }} />
+            <button onClick={() => void generatePlan()}>Generate plan</button>
+            {error ? <Alert>{error}</Alert> : null}
+          </div>
+        </Surface>
+        <Surface title="Plan preview">
+          {result ? (
+            <pre>{JSON.stringify(result, null, 2)}</pre>
+          ) : (
+            <EmptyState title="No plan generated" description="Describe a data-prep goal to preview transformation steps." />
+          )}
+        </Surface>
       </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {result ? (
-        <pre style={{ marginTop: 12, background: "#101832", padding: 12, borderRadius: 8 }}>
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      ) : null}
     </section>
   );
 }

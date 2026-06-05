@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireServerSession } from "@/session-server";
+import { BrandLogo } from "@/components/ui";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   await requireServerSession({ adminOnly: true });
@@ -16,17 +17,27 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   ] as const;
 
   return (
-    <main style={{ maxWidth: 1200, margin: "0 auto", padding: 20 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Admin Console</h1>
-        <form action="/api/auth/logout" method="post">
-          <button type="submit">Logout</button>
+    <main className="app-shell">
+      <aside className="sidebar">
+        <BrandLogo compact />
+        <div className="nav-section">
+          <div className="nav-label">Admin modules</div>
+          {nav.map(([href, label]) => <Link className="nav-link" key={href} href={href}>{label}<span>→</span></Link>)}
+        </div>
+        <form className="nav-section" action="/api/auth/logout" method="post">
+          <button className="secondary" type="submit" style={{ width: "100%" }}>Logout</button>
         </form>
-      </header>
-      <nav style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        {nav.map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}
-      </nav>
-      {children}
+      </aside>
+      <section className="main-panel">
+        <div className="topbar">
+          <div>
+            <div className="eyebrow">Administration</div>
+            <h1 style={{ margin: 0 }}>Control Center</h1>
+          </div>
+          <span className="badge">portal-admin</span>
+        </div>
+        {children}
+      </section>
     </main>
   );
 }

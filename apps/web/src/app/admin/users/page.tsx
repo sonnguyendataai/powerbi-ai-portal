@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Alert, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface UserItem {
   id: string;
@@ -24,18 +25,25 @@ export default function AdminUsersPage() {
     setUsers(json.users ?? []);
   }
 
+  useEffect(() => {
+    void loadUsers();
+  }, []);
+
   return (
     <section>
-      <h2>Users</h2>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => void loadUsers()}>Load</button>
-      </div>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      <ul>
-        {users.map((user) => (
-          <li key={user.id}>{user.email} · tenant={user.tenantId} · roles={user.roleIds.join(",")}</li>
-        ))}
-      </ul>
+      <PageHeader eyebrow="Identity" title="Users" description="Manage portal users, tenant bindings, and assigned roles." actions={<button onClick={() => void loadUsers()}>Refresh</button>} />
+      {error ? <Alert>{error}</Alert> : null}
+      <Surface>
+        {users.length === 0 ? <EmptyState title="No users loaded" description="Refresh to load users from the operational store." /> : null}
+        <table className="table">
+          <thead><tr><th>Email</th><th>Tenant</th><th>Roles</th></tr></thead>
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id}><td>{user.email}</td><td>{user.tenantId}</td><td>{user.roleIds.join(", ")}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </Surface>
     </section>
   );
 }

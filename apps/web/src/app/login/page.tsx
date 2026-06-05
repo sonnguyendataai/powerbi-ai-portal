@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Alert, BrandLogo } from "@/components/ui";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -35,20 +36,34 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <section style={{ width: "100%", maxWidth: 460, border: "1px solid #243056", borderRadius: 12, padding: 24 }}>
-        <h1 style={{ marginTop: 0 }}>Portal Sign In</h1>
-        <p style={{ opacity: 0.8 }}>Sign in with local credentials or Microsoft AD SSO.</p>
-        <div style={{ display: "grid", gap: 10 }}>
+    <main className="login-page">
+      <section className="login-brand">
+        <BrandLogo />
+        <div>
+          <div className="eyebrow">Enterprise analytics portal</div>
+          <h1 className="page-title">Empowering insights, transforming futures.</h1>
+          <p className="page-description">
+            Centralize Power BI content, AI-assisted analytics, governed data workflows,
+            and administration in one modern portal.
+          </p>
+        </div>
+        <div className="badge">Secure SSO + local identity</div>
+      </section>
+      <section className="login-form-wrap">
+        <div className="login-card card">
+          <h2 style={{ marginTop: 0 }}>Welcome back</h2>
+          <p className="muted">Sign in with local credentials or Microsoft AD SSO.</p>
+          <div className="stack">
           <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
           <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Password" />
           <button disabled={busy || !username || !password} onClick={() => void loginLocal()}>
             {busy ? "Signing in..." : "Sign in with username/password"}
           </button>
-          <a href="/api/auth/sso/start" style={{ textAlign: "center" }}>Continue with Microsoft AD</a>
+          <a className="button secondary" href="/api/auth/sso/start">Continue with Microsoft AD</a>
         </div>
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-        {externalError ? <p style={{ color: "crimson" }}>SSO error: {externalError}</p> : null}
+          {error ? <Alert>{error}</Alert> : null}
+          {externalError ? <Alert>SSO error: {externalError}</Alert> : null}
+        </div>
       </section>
     </main>
   );
