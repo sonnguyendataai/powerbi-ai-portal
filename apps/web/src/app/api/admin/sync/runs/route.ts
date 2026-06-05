@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireAdminApiKey } from "@/app/api/_lib/admin-auth";
 import { getBiOperationsService } from "@/bi-ops";
 
+export const dynamic = "force-dynamic";
+
 const querySchema = z.object({
   status: z.enum(["running", "succeeded", "failed"]).optional(),
   mode: z.enum(["full", "workspace"]).optional(),
@@ -35,5 +37,11 @@ export async function GET(req: Request): Promise<Response> {
     return true;
   }).slice(parsedQuery.data.offset, parsedQuery.data.offset + parsedQuery.data.limit);
 
-  return NextResponse.json({ runs }, { status: 200 });
+  return NextResponse.json(
+    { runs },
+    {
+      status: 200,
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    },
+  );
 }

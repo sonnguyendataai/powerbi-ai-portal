@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAdminApiKey } from "@/app/api/_lib/admin-auth";
 import { getBiOperationsService } from "@/bi-ops";
 
+export const dynamic = "force-dynamic";
+
 interface RouteContext {
   params: Promise<{ runId: string }>;
 }
@@ -21,5 +23,11 @@ export async function GET(req: Request, ctx: RouteContext): Promise<Response> {
   }
 
   const delta = service.listSyncDeltaItems(runId).slice(offset, offset + limit);
-  return NextResponse.json({ run, delta, paging: { limit, offset } }, { status: 200 });
+  return NextResponse.json(
+    { run, delta, paging: { limit, offset } },
+    {
+      status: 200,
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    },
+  );
 }
