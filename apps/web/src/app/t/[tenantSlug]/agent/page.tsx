@@ -9,7 +9,7 @@ interface ChatResponse {
 }
 
 export default function TenantAgentPage({ params }: { params: Promise<{ tenantSlug: string }> }) {
-  const { tenantSlug } = use(params);
+  use(params);
   const [question, setQuestion] = useState("What are key sales trends this month?");
   const [answer, setAnswer] = useState<ChatResponse | null>(null);
   const [error, setError] = useState("");
@@ -20,9 +20,6 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-tenant-id": tenantSlug,
-        "x-user-id": "user@example.com",
-        "x-user-roles": "analyst",
       },
       body: JSON.stringify({ message: question }),
     });

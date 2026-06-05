@@ -2,10 +2,11 @@ import type { SessionUser } from "@/auth";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { loadEnv } from "@/env";
 
-interface SessionTokenPayload {
+export interface SessionTokenPayload {
   sub: string;
   tenantId: string;
   roles: SessionUser["roles"];
+  provider: "local" | "microsoft-ad";
   region?: SessionUser["region"];
   exp?: number;
 }
@@ -42,6 +43,18 @@ export function assertTenantAccess(user: SessionUser, tenantId: string): void {
   }
 }
 
+export function assertAdminRole(user: SessionUser): void {
+  if (!user.roles.includes("portal-admin")) {
+    throw new Error("admin_role_required");
+  }
+}
+
+export function signSessionToken(payload: SessionTokenPayload, secret: string): string {
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", secret).update(encodedPayload).digest("base64url");
+  return `${encodedPayload}.${signature}`;
+}
+
 function extractSessionToken(req: Request): string | undefined {
   const auth = req.headers.get("authorization");
   if (auth?.startsWith("Bearer ")) {
@@ -56,7 +69,7 @@ function extractSessionToken(req: Request): string | undefined {
   return decodeURIComponent(raw.slice("portal_session=".length));
 }
 
-function verifySignedToken(token: string, secret: string): SessionTokenPayload | null {
+export function verifySignedToken(token: string, secret: string): SessionTokenPayload | null {
   const [encodedPayload, signature] = token.split(".");
   if (!encodedPayload || !signature) return null;
   const expected = createHmac("sha256", secret).update(encodedPayload).digest("base64url");
@@ -71,5 +84,5 @@ function verifySignedToken(token: string, secret: string): SessionTokenPayload |
     return payload;
   } catch {
     return null;
-  };
+  }
 }

@@ -20,17 +20,13 @@ export default function TenantReportsPage({
   params: Promise<{ tenantSlug: string }>;
 }) {
   const { tenantSlug } = use(params);
-  const [adminKey, setAdminKey] = useState("");
-  const [userId, setUserId] = useState("user@example.com");
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   async function loadReports(): Promise<void> {
     setError("");
-    const res = await fetch(`/api/admin/reports?userId=${encodeURIComponent(userId)}`, {
-      headers: adminKey ? { "x-admin-api-key": adminKey } : {},
-    });
+    const res = await fetch("/api/reports");
     const json = (await res.json()) as ReportsResponse;
     if (!res.ok) {
       setError("Failed to load reports. Provide admin key if required.");
@@ -41,13 +37,12 @@ export default function TenantReportsPage({
   }
 
   async function toggleFavorite(reportId: string): Promise<void> {
-    const res = await fetch("/api/admin/reports", {
+    const res = await fetch("/api/reports", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(adminKey ? { "x-admin-api-key": adminKey } : {}),
       },
-      body: JSON.stringify({ favorite: { userId, reportId } }),
+      body: JSON.stringify({ reportId }),
     });
     if (res.ok) {
       await loadReports();
@@ -61,8 +56,6 @@ export default function TenantReportsPage({
       <h2>Reports</h2>
       <p>Browse tenant reports and manage favorites.</p>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Admin API key" />
-        <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="User ID" />
         <button onClick={() => void loadReports()}>Load</button>
       </div>
       {error ? <p style={{ color: "crimson" }}>{error}</p> : null}

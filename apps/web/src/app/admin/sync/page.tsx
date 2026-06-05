@@ -23,7 +23,6 @@ interface Workspace {
 }
 
 export default function AdminSyncPage() {
-  const [adminKey, setAdminKey] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [runs, setRuns] = useState<SyncRun[]>([]);
@@ -39,7 +38,6 @@ export default function AdminSyncPage() {
       ...init,
       headers: {
         "Content-Type": "application/json",
-        ...(adminKey ? { "x-admin-api-key": adminKey } : {}),
       },
     });
     const json = (await res.json()) as Record<string, unknown>;
@@ -91,15 +89,14 @@ export default function AdminSyncPage() {
   useEffect(() => {
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminKey]);
+  }, []);
 
   return (
     <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <h1>Admin Sync Center</h1>
       <p>Sync Power BI content and inspect run-level delta history.</p>
       <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, marginBottom: 16 }}>
-        <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Admin API key" />
-        <button disabled={busy} onClick={() => void triggerSync("full")} style={{ marginLeft: 8 }}>Sync All</button>
+        <button disabled={busy} onClick={() => void triggerSync("full")}>Sync All</button>
         <select value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)} style={{ marginLeft: 8 }}>
           <option value="">Select workspace</option>
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.displayName}</option>)}

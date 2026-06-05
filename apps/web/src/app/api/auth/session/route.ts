@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { loadEnv } from "@/env";
+import { signSessionToken } from "@/app/api/_lib/session";
 
 const schema = z.object({
   userId: z.string().min(1),
@@ -13,6 +13,9 @@ const schema = z.object({
 
 export async function POST(req: Request): Promise<Response> {
   const env = loadEnv(process.env);
+  if (env.APP_ENV === "prod") {
+    return NextResponse.json({ error: "disabled_in_production" }, { status: 403 });
+  }
   if (!env.SESSION_SIGNING_SECRET) {
     return NextResponse.json({ error: "session_signing_secret_not_configured" }, { status: 500 });
   }
@@ -26,24 +29,23 @@ export async function POST(req: Request): Promise<Response> {
     sub: parsed.data.userId,
     tenantId: parsed.data.tenantId,
     roles: parsed.data.roles,
+    provider: "local" as const,
     ...(parsed.data.region ? { region: parsed.data.region } : {}),
     exp: Math.floor(Date.now() / 1000) + parsed.data.ttlSeconds,
   };
-  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-  const signature = createHmac("sha256", env.SESSION_SIGNING_SECRET).update(encoded).digest("base64url");
-  const token = `${encoded}.${signature}`;
+  const token = signSessionToken(payload, env.SESSION_SIGNING_SECRET);
 
   const response = NextResponse.json({ ok: true, tenantId: parsed.data.tenantId });
   response.cookies.set("portal_session", token, {
     httpOnly: true,
-    secure: env.APP_ENV === "prod",
+    secure: false,
     sameSite: "lax",
     path: "/",
     maxAge: parsed.data.ttlSeconds,
   });
   response.cookies.set("portal_tenant", parsed.data.tenantId, {
     httpOnly: false,
-    secure: env.APP_ENV === "prod",
+    secure: false,
     sameSite: "lax",
     path: "/",
     maxAge: parsed.data.ttlSeconds,
