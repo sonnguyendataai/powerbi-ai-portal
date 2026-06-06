@@ -5,7 +5,17 @@ interface WindowCounter {
   resetAtMs: number;
 }
 
+// Max entries kept in memory to prevent unbounded growth
+const COUNTER_MAX_SIZE = 10_000;
 const counters = new Map<string, WindowCounter>();
+
+let _rateLimitPool: ReturnType<typeof postgres> | undefined;
+function getRateLimitPool(databaseUrl: string): ReturnType<typeof postgres> {
+  if (!_rateLimitPool) {
+    _rateLimitPool = postgres(databaseUrl, { max: 3, idle_timeout: 30 });
+  }
+  return _rateLimitPool;
+}
 
 export async function checkRateLimit(
   key: string,
@@ -25,6 +35,15 @@ function checkRateLimitInMemory(
   windowMs: number,
 ): { allowed: boolean; retryAfterSeconds?: number } {
   const now = Date.now();
+
+  // Evict expired entries when map grows too large
+  if (counters.size >= COUNTER_MAX_SIZE) {
+    for (const [k, v] of counters) {
+      if (v.resetAtMs <= now) counters.delete(k);
+      if (counters.size < COUNTER_MAX_SIZE * 0.8) break;
+    }
+  }
+
   const existing = counters.get(key);
   if (!existing || existing.resetAtMs <= now) {
     counters.set(key, { count: 1, resetAtMs: now + windowMs });
@@ -48,7 +67,7 @@ async function checkRateLimitInDb(
   windowMs: number,
   databaseUrl: string,
 ): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
-  const sql = postgres(databaseUrl, { max: 1 });
+  const sql = getRateLimitPool(databaseUrl);
   const now = Date.now();
   const windowStart = Math.floor(now / windowMs) * windowMs;
   const windowKey = `${key}:${windowStart}`;
@@ -77,7 +96,5 @@ async function checkRateLimitInDb(
     return { allowed: true };
   } catch {
     return checkRateLimitInMemory(key, limit, windowMs);
-  } finally {
-    await sql.end({ timeout: 1 });
   }
 }

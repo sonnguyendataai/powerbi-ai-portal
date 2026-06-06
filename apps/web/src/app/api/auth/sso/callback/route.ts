@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { loadEnv } from "@/env";
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return "";
+  }
+}
 import { discoverMicrosoftOidc, exchangeCodeForProfile } from "@/auth-microsoft";
 import { signSessionToken } from "@/app/api/_lib/session";
 import { ensureAuthSchema, upsertMicrosoftIdentity } from "@/auth-db";
@@ -11,8 +19,8 @@ export async function GET(req: Request): Promise<Response> {
   const state = url.searchParams.get("state");
   const stateCookie = req.headers.get("cookie")?.split(";").map((v) => v.trim()).find((x) => x.startsWith("portal_oidc_state="));
   const verifierCookie = req.headers.get("cookie")?.split(";").map((v) => v.trim()).find((x) => x.startsWith("portal_oidc_pkce="));
-  const expectedState = stateCookie ? decodeURIComponent(stateCookie.slice("portal_oidc_state=".length)) : "";
-  const verifier = verifierCookie ? decodeURIComponent(verifierCookie.slice("portal_oidc_pkce=".length)) : "";
+  const expectedState = safeDecodeURIComponent(stateCookie?.slice("portal_oidc_state=".length) ?? "");
+  const verifier = safeDecodeURIComponent(verifierCookie?.slice("portal_oidc_pkce=".length) ?? "");
   if (!code || !state || !expectedState || state !== expectedState || !verifier) {
     return NextResponse.redirect(new URL("/login?error=sso_state_invalid", req.url));
   }
