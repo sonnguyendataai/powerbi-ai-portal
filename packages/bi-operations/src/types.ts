@@ -21,11 +21,11 @@ export const biPageSchema = z.object({
   reportId: z.string().min(1),
   name: z.string().min(1),
   displayName: z.string().min(1),
-  sourceBiId: z.string().min(1).optional(),
-  sourceUpdatedAt: z.string().min(1).optional(),
-  lastSeenAt: z.string().min(1).optional(),
+  sourceBiId: z.string().min(1).nullish(),
+  sourceUpdatedAt: z.string().min(1).nullish(),
+  lastSeenAt: z.string().min(1).nullish(),
   isDeleted: z.boolean().default(false),
-  contentHash: z.string().min(1).optional(),
+  contentHash: z.string().min(1).nullish(),
 });
 export type BiPage = z.infer<typeof biPageSchema>;
 
@@ -37,11 +37,11 @@ export const biReportSchema = z.object({
   displayName: z.string().min(1),
   embedUrl: z.string().url().or(z.string().startsWith("https://")),
   pageIds: z.array(z.string().min(1)),
-  sourceBiId: z.string().min(1).optional(),
-  sourceUpdatedAt: z.string().min(1).optional(),
-  lastSeenAt: z.string().min(1).optional(),
+  sourceBiId: z.string().min(1).nullish(),
+  sourceUpdatedAt: z.string().min(1).nullish(),
+  lastSeenAt: z.string().min(1).nullish(),
   isDeleted: z.boolean().default(false),
-  contentHash: z.string().min(1).optional(),
+  contentHash: z.string().min(1).nullish(),
 });
 export type BiReport = z.infer<typeof biReportSchema>;
 
@@ -50,10 +50,10 @@ export const biDatasetSchema = z.object({
   workspaceId: z.string().min(1),
   name: z.string().min(1),
   sourceBiId: z.string().min(1),
-  sourceUpdatedAt: z.string().min(1).optional(),
-  lastSeenAt: z.string().min(1).optional(),
+  sourceUpdatedAt: z.string().min(1).nullish(),
+  lastSeenAt: z.string().min(1).nullish(),
   isDeleted: z.boolean().default(false),
-  contentHash: z.string().min(1).optional(),
+  contentHash: z.string().min(1).nullish(),
 });
 export type BiDataset = z.infer<typeof biDatasetSchema>;
 
@@ -62,10 +62,10 @@ export const biWorkspaceSchema = z.object({
   name: z.string().min(1),
   displayName: z.string().min(1),
   sourceBiId: z.string().min(1),
-  sourceUpdatedAt: z.string().min(1).optional(),
-  lastSeenAt: z.string().min(1).optional(),
+  sourceUpdatedAt: z.string().min(1).nullish(),
+  lastSeenAt: z.string().min(1).nullish(),
   isDeleted: z.boolean().default(false),
-  contentHash: z.string().min(1).optional(),
+  contentHash: z.string().min(1).nullish(),
 });
 export type BiWorkspace = z.infer<typeof biWorkspaceSchema>;
 
