@@ -2,6 +2,14 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import postgres from "postgres";
 import { loadEnv } from "@/env";
 
+let _authPool: ReturnType<typeof postgres> | undefined;
+function getAuthPool(databaseUrl: string): ReturnType<typeof postgres> {
+  if (!_authPool) {
+    _authPool = postgres(databaseUrl, { max: 5, idle_timeout: 30 });
+  }
+  return _authPool;
+}
+
 export interface PortalIdentity {
   userId: string;
   username: string;
@@ -24,7 +32,7 @@ const ROLE_ALLOWLIST = new Set(["portal-admin", "analyst", "viewer"]);
 export async function ensureAuthSchema(): Promise<void> {
   const env = loadEnv(process.env);
   if (!env.DATABASE_URL) return;
-  const sql = postgres(env.DATABASE_URL, { max: 1 });
+  const sql = getAuthPool(env.DATABASE_URL);
   try {
     await sql`create table if not exists portal_users (
       id text primary key,
@@ -64,8 +72,8 @@ export async function ensureAuthSchema(): Promise<void> {
         tenantId: env.LOCAL_AUTH_BOOTSTRAP_TENANT_ID ?? "tenant-default",
       });
     }
-  } finally {
-    await sql.end({ timeout: 1 });
+  } catch (err) {
+    throw err;
   }
 }
 
@@ -75,36 +83,32 @@ export async function authenticateLocalUser(input: {
 }): Promise<PortalIdentity | null> {
   const env = loadEnv(process.env);
   if (!env.DATABASE_URL) return null;
-  const sql = postgres(env.DATABASE_URL, { max: 1 });
-  try {
-    const rows = await sql<UserRow[]>`
-      select u.id, u.username, u.tenant_id, u.display_name, u.is_active, c.password_hash
-      from portal_users u
-      join portal_user_credentials c on c.user_id = u.id
-      where u.username = ${input.username}
-      limit 1
-    `;
-    const user = rows[0];
-    if (!user || !user.is_active) return null;
-    if (!verifyPassword(input.password, user.password_hash)) return null;
+  const sql = getAuthPool(env.DATABASE_URL);
+  const rows = await sql<UserRow[]>`
+    select u.id, u.username, u.tenant_id, u.display_name, u.is_active, c.password_hash
+    from portal_users u
+    join portal_user_credentials c on c.user_id = u.id
+    where u.username = ${input.username}
+    limit 1
+  `;
+  const user = rows[0];
+  if (!user || !user.is_active) return null;
+  if (!verifyPassword(input.password, user.password_hash)) return null;
 
-    const roleRows = await sql<{ role: string }[]>`
-      select role from portal_user_roles
-      where user_id = ${user.id} and tenant_id = ${user.tenant_id}
-    `;
-    const roles = roleRows
-      .map((row) => row.role)
-      .filter((role): role is "portal-admin" | "analyst" | "viewer" => ROLE_ALLOWLIST.has(role));
-    return {
-      userId: user.id,
-      username: user.username,
-      tenantId: user.tenant_id,
-      roles: roles.length > 0 ? roles : ["viewer"],
-      ...(user.display_name ? { displayName: user.display_name } : {}),
-    };
-  } finally {
-    await sql.end({ timeout: 1 });
-  }
+  const roleRows = await sql<{ role: string }[]>`
+    select role from portal_user_roles
+    where user_id = ${user.id} and tenant_id = ${user.tenant_id}
+  `;
+  const roles = roleRows
+    .map((row) => row.role)
+    .filter((role): role is "portal-admin" | "analyst" | "viewer" => ROLE_ALLOWLIST.has(role));
+  return {
+    userId: user.id,
+    username: user.username,
+    tenantId: user.tenant_id,
+    roles: roles.length > 0 ? roles : ["viewer"],
+    ...(user.display_name ? { displayName: user.display_name } : {}),
+  };
 }
 
 export async function upsertMicrosoftIdentity(input: {
@@ -116,7 +120,7 @@ export async function upsertMicrosoftIdentity(input: {
 }): Promise<PortalIdentity | null> {
   const env = loadEnv(process.env);
   if (!env.DATABASE_URL) return null;
-  const sql = postgres(env.DATABASE_URL, { max: 1 });
+  const sql = getAuthPool(env.DATABASE_URL);
   try {
     await sql.begin(async (tx) => {
       await tx`
@@ -137,8 +141,8 @@ export async function upsertMicrosoftIdentity(input: {
       roles: input.roles.length > 0 ? input.roles : ["viewer"],
       ...(input.displayName ? { displayName: input.displayName } : {}),
     };
-  } finally {
-    await sql.end({ timeout: 1 });
+  } catch (err) {
+    throw err;
   }
 }
 

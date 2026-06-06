@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import { loadEnv } from "./env";
+
+const OAuthTokenSchema = z.object({ access_token: z.string().min(1) });
 
 export interface PowerBiWorkspaceContent {
   workspaceId: string;
@@ -170,15 +173,16 @@ async function fetchAccessToken(input: {
     { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form },
   );
   if (!res.ok) throw new Error(`Power BI OAuth failed (${res.status})`);
-  const json = await res.json() as { access_token?: unknown };
-  const token = typeof json.access_token === "string" ? json.access_token : "";
-  if (!token) throw new Error("Power BI OAuth response missing access token");
-  return token;
+  const raw = await res.json();
+  const parsed = OAuthTokenSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(`Power BI OAuth response missing or invalid access_token: ${parsed.error.message}`);
+  }
+  return parsed.data.access_token;
 }
 
 async function listWorkspaces(base: string, token: string): Promise<Array<{ id: string; name: string }>> {
-  const json = await getJson(base, token, "/groups");
-  const items = Array.isArray(json.value) ? json.value : [];
+  const items = await getPaginatedItems(base, token, "/groups");
   return items.map((item) => ({
     id: typeof item.id === "string" ? item.id : "",
     name: typeof item.name === "string" ? item.name : "",
@@ -190,8 +194,7 @@ async function listDatasets(
   token: string,
   workspaceId: string,
 ): Promise<Array<{ id: string; name: string; configuredBy?: string }>> {
-  const json = await getJson(base, token, `/groups/${workspaceId}/datasets`);
-  const items = Array.isArray(json.value) ? json.value : [];
+  const items = await getPaginatedItems(base, token, `/groups/${workspaceId}/datasets`);
   return items.map((item) => ({
     id: typeof item.id === "string" ? item.id : "",
     name: typeof item.name === "string" ? item.name : "",
@@ -204,8 +207,7 @@ async function listReports(
   token: string,
   workspaceId: string,
 ): Promise<Array<{ id: string; name: string; datasetId?: string; embedUrl: string }>> {
-  const json = await getJson(base, token, `/groups/${workspaceId}/reports`);
-  const items = Array.isArray(json.value) ? json.value : [];
+  const items = await getPaginatedItems(base, token, `/groups/${workspaceId}/reports`);
   return items.map((item) => ({
     id: typeof item.id === "string" ? item.id : "",
     name: typeof item.name === "string" ? item.name : "",
@@ -228,6 +230,22 @@ async function listPages(
     displayName: typeof item.displayName === "string" ? item.displayName : `Page ${idx + 1}`,
     order: typeof item.order === "number" ? item.order : idx,
   }));
+}
+
+const PAGE_SIZE = 5000;
+
+async function getPaginatedItems(base: string, token: string, path: string): Promise<Record<string, unknown>[]> {
+  const results: Record<string, unknown>[] = [];
+  let skip = 0;
+  while (true) {
+    const separator = path.includes("?") ? "&" : "?";
+    const page = await getJson(base, token, `${path}${separator}$top=${PAGE_SIZE}&$skip=${skip}`);
+    const items = Array.isArray(page.value) ? (page.value as Record<string, unknown>[]) : [];
+    results.push(...items);
+    if (items.length < PAGE_SIZE) break;
+    skip += PAGE_SIZE;
+  }
+  return results;
 }
 
 async function getJson(base: string, token: string, path: string): Promise<Record<string, unknown>> {

@@ -3,21 +3,26 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
 export function BrandLogo({ compact = false }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="sidebar-logo">
+        <Link className="sidebar-logo-mark" href="/">
+          <div className="sidebar-logo-icon">⚡</div>
+          <div className="sidebar-logo-text">
+            <div className="sidebar-logo-name">DataMind</div>
+            <div className="sidebar-logo-sub">Power BI Portal</div>
+          </div>
+        </Link>
+      </div>
+    );
+  }
   return (
-    <Link className="brand-logo" href="/">
-      <Image
-        src="/brand/datamind-logo.png"
-        alt="DataMind"
-        width={compact ? 140 : 220}
-        height={compact ? 50 : 78}
-        priority
-      />
-      {compact ? null : (
-        <span className="brand-wordmark">
-          <span className="brand-name">Power BI AI Portal</span>
-          <span className="brand-tagline">Enterprise analytics operations</span>
-        </span>
-      )}
+    <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
+      <div className="sidebar-logo-icon" style={{ width: 44, height: 44, fontSize: 22 }}>⚡</div>
+      <div>
+        <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-0.03em", color: "var(--text)" }}>DataMind</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Power BI AI Portal</div>
+      </div>
     </Link>
   );
 }
@@ -35,42 +40,38 @@ export function PageHeader(props: {
         <h1 className="page-title">{props.title}</h1>
         {props.description ? <p className="page-description">{props.description}</p> : null}
       </div>
-      {props.actions ? <div>{props.actions}</div> : null}
+      {props.actions ? <div style={{ flexShrink: 0 }}>{props.actions}</div> : null}
     </header>
   );
 }
 
 export function Surface(props: { title?: string; children: ReactNode; style?: CSSProperties }) {
   return (
-    <section
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius)",
-        padding: 16,
-        background: "rgba(15,23,48,0.7)",
-        ...props.style,
-      }}
-    >
-      {props.title ? <h3 style={{ marginTop: 0 }}>{props.title}</h3> : null}
+    <section className="surface" style={props.style}>
+      {props.title ? <div className="surface-title">{props.title}</div> : null}
       {props.children}
     </section>
   );
 }
 
 export function Stack(props: { children: ReactNode; gap?: number }) {
-  return <div className="stack" style={{ gap: props.gap }}>{props.children}</div>;
+  return <div className="stack" style={props.gap !== undefined ? { gap: props.gap } : undefined}>{props.children}</div>;
 }
 
 export function Grid(props: { children: ReactNode; columns?: string; gap?: number }) {
-  return <div style={{ display: "grid", gridTemplateColumns: props.columns ?? "1fr 1fr", gap: props.gap ?? 12 }}>{props.children}</div>;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: props.columns ?? "1fr 1fr", gap: props.gap ?? 16 }}>
+      {props.children}
+    </div>
+  );
 }
 
-export function MetricCard(props: { label: string; value: string; hint?: string }) {
+export function MetricCard(props: { label: string; value: string; hint?: string; icon?: string }) {
   return (
     <article className="metric-card">
-      <div className="muted">{props.label}</div>
+      <div className="metric-label">{props.label}</div>
       <div className="metric-value">{props.value}</div>
-      {props.hint ? <div className="muted">{props.hint}</div> : null}
+      {props.hint ? <div className="metric-hint">{props.hint}</div> : null}
     </article>
   );
 }
@@ -85,6 +86,31 @@ export function EmptyState(props: { title: string; description: string; action?:
   );
 }
 
-export function Alert(props: { children: ReactNode }) {
-  return <div className="alert">{props.children}</div>;
+export function Alert(props: { children: ReactNode; variant?: "error" | "success" | "info" }) {
+  const cls = props.variant === "success" ? "alert success" : props.variant === "info" ? "alert info" : "alert";
+  return <div className={cls}>{props.children}</div>;
+}
+
+export function Badge(props: { children: ReactNode; variant?: "default" | "success" | "warning" | "danger" }) {
+  const cls = props.variant ? `badge ${props.variant}` : "badge";
+  return <span className={cls}>{props.children}</span>;
+}
+
+export function Divider() {
+  return <div className="divider" />;
+}
+
+export function Skeleton({ height = 16, width }: { height?: number; width?: number | string }) {
+  return (
+    <div
+      style={{
+        height,
+        width: width ?? "100%",
+        borderRadius: 6,
+        background: "linear-gradient(90deg, rgba(108,142,247,0.06) 0%, rgba(108,142,247,0.12) 50%, rgba(108,142,247,0.06) 100%)",
+        backgroundSize: "200% 100%",
+        animation: "shimmer 1.4s infinite",
+      }}
+    />
+  );
 }

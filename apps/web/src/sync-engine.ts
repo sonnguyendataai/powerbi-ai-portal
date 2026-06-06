@@ -59,10 +59,11 @@ function buildDelta(
       isDeleted: workspace.isDeleted,
       metadata: { name: workspace.name },
     }));
+  const existingWorkspacesMap = new Map(existingWorkspaces.map((w) => [w.id, w]));
 
   for (const workspace of remote) {
     const afterHash = hashContent({ id: workspace.workspaceId, name: workspace.workspaceName });
-    const current = existingWorkspaces.find((item) => item.id === workspace.workspaceId);
+    const current = existingWorkspacesMap.get(workspace.workspaceId);
     if (!current) {
       delta.push(
         buildSyncDeltaItem({
@@ -157,8 +158,9 @@ function buildDelta(
       })),
     ),
   );
+  const reportsById = new Map(service.listReports().map((r) => [r.id, r]));
   const existingPages = service.listPages().flatMap((page) => {
-    const report = service.listReports().find((entry) => entry.id === page.reportId);
+    const report = reportsById.get(page.reportId);
     if (!report || !isInScope(scope, report.workspaceId)) return [];
     return [
       {
@@ -195,9 +197,10 @@ function compareScoped<TIncoming extends { id: string }, TExisting extends { id:
   toMetadata: (item: TIncoming) => Record<string, string>,
 ): void {
   const incomingMap = new Map(incoming.map((item) => [getId(item), item]));
+  const existingMap = new Map(existing.map((entry) => [entry.id, entry]));
   for (const item of incoming) {
     const id = getId(item);
-    const current = existing.find((entry) => entry.id === id);
+    const current = existingMap.get(id);
     const hash = toHash(item);
     if (!current) {
       delta.push(
@@ -307,34 +310,33 @@ function applyRemoteSnapshot(
 
 function applySoftDeletes(service: BiOperationsService, delta: SyncDeltaItem[]): void {
   const removed = delta.filter((item) => item.changeType === "removed");
+  if (removed.length === 0) return;
   const markedAt = new Date().toISOString();
+
+  const workspacesById = new Map(service.listWorkspaces().map((w) => [w.id, w]));
+  const datasetsById = new Map(service.listDatasets().map((d) => [d.id, d]));
+  const reportsById = new Map(service.listReports().map((r) => [r.id, r]));
+  const pagesById = new Map(service.listPages().map((p) => [p.id, p]));
+
   for (const item of removed) {
     if (item.entityType === "workspace") {
-      const workspace = service.listWorkspaces().find((entry) => entry.id === item.entityId);
-      if (workspace) {
-        service.upsertWorkspace({ ...workspace, isDeleted: true, lastSeenAt: markedAt });
-      }
+      const workspace = workspacesById.get(item.entityId);
+      if (workspace) service.upsertWorkspace({ ...workspace, isDeleted: true, lastSeenAt: markedAt });
       continue;
     }
     if (item.entityType === "dataset") {
-      const dataset = service.listDatasets().find((entry) => entry.id === item.entityId);
-      if (dataset) {
-        service.upsertDataset({ ...dataset, isDeleted: true, lastSeenAt: markedAt });
-      }
+      const dataset = datasetsById.get(item.entityId);
+      if (dataset) service.upsertDataset({ ...dataset, isDeleted: true, lastSeenAt: markedAt });
       continue;
     }
     if (item.entityType === "report") {
-      const report = service.listReports().find((entry) => entry.id === item.entityId);
-      if (report) {
-        service.upsertReport({ ...report, isDeleted: true, lastSeenAt: markedAt });
-      }
+      const report = reportsById.get(item.entityId);
+      if (report) service.upsertReport({ ...report, isDeleted: true, lastSeenAt: markedAt });
       continue;
     }
     if (item.entityType === "page") {
-      const page = service.listPages().find((entry) => entry.id === item.entityId);
-      if (page) {
-        service.upsertPage({ ...page, isDeleted: true, lastSeenAt: markedAt });
-      }
+      const page = pagesById.get(item.entityId);
+      if (page) service.upsertPage({ ...page, isDeleted: true, lastSeenAt: markedAt });
     }
   }
 }
