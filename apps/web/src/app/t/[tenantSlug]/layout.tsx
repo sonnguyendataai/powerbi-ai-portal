@@ -54,35 +54,8 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
             </Link>
           ) : null}
           <form action="/api/auth/logout" method="post">
-            <button
-              type="submit"
-              style={{
-                width: "100%",
-                justifyContent: "flex-start",
-                gap: 10,
-                padding: "9px 10px",
-                background: "transparent",
-                border: "1px solid transparent",
-                borderRadius: "var(--radius-sm)",
-                color: "var(--text-muted)",
-                fontSize: 13.5,
-                fontWeight: 500,
-                transition: "all 0.18s",
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "rgba(248,113,113,0.08)";
-                el.style.borderColor = "rgba(248,113,113,0.2)";
-                el.style.color = "#f87171";
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "transparent";
-                el.style.borderColor = "transparent";
-                el.style.color = "var(--text-muted)";
-              }}
-            >
-              <span>↩</span> Sign out
+            <button type="submit" className="nav-link nav-signout">
+              <span className="nav-link-icon">↩</span> Sign out
             </button>
           </form>
         </nav>
