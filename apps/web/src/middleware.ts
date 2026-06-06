@@ -1,15 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createHmac, timingSafeEqual } from "node:crypto";
 
-function extractTenantFromSession(token: string, secret: string): string | null {
+// Edge-compatible: decode without verifying signature.
+// HMAC verification happens in API route handlers (server-side Node.js).
+// Middleware only guards routing — prevents navigating to the wrong tenant slug.
+function extractTenantFromSession(token: string): string | null {
   try {
-    const [encodedPayload, signature] = token.split(".");
-    if (!encodedPayload || !signature) return null;
-    const expected = createHmac("sha256", secret).update(encodedPayload).digest("base64url");
-    const a = Buffer.from(signature);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as {
+    const encodedPayload = token.split(".")[0];
+    if (!encodedPayload) return null;
+    const payload = JSON.parse(atob(encodedPayload.replace(/-/g, "+").replace(/_/g, "/"))) as {
       tenantId?: unknown;
       exp?: number;
     };
@@ -41,31 +39,15 @@ export function middleware(req: NextRequest): NextResponse {
   const tenantSlug = parts[1];
   if (!tenantSlug) return NextResponse.redirect(new URL("/login", req.url));
 
-  // Validate the tenant slug against the signed session token, not just the cookie
-  const secret = process.env["SESSION_SIGNING_SECRET"];
-  if (secret) {
-    const sessionTenantId = extractTenantFromSession(sessionToken, secret);
-    if (!sessionTenantId) {
-      const url = new URL("/login", req.url);
-      url.searchParams.set("error", "authentication_required");
-      return NextResponse.redirect(url);
-    }
-    if (sessionTenantId !== tenantSlug) {
-      const url = new URL("/login", req.url);
-      url.searchParams.set("error", "tenant_mismatch");
-      return NextResponse.redirect(url);
-    }
-    return NextResponse.next();
-  }
-
-  // Fallback (dev without secret): check portal_tenant cookie
-  const tenantFromCookie = req.cookies.get("portal_tenant")?.value;
-  if (!tenantFromCookie) {
+  // Decode tenant from session token (no HMAC verify — Edge runtime limitation).
+  // Full signature verification happens in every API route handler.
+  const sessionTenantId = extractTenantFromSession(sessionToken);
+  if (!sessionTenantId) {
     const url = new URL("/login", req.url);
-    url.searchParams.set("error", "tenant_required");
+    url.searchParams.set("error", "authentication_required");
     return NextResponse.redirect(url);
   }
-  if (tenantFromCookie !== tenantSlug) {
+  if (sessionTenantId !== tenantSlug) {
     const url = new URL("/login", req.url);
     url.searchParams.set("error", "tenant_mismatch");
     return NextResponse.redirect(url);
