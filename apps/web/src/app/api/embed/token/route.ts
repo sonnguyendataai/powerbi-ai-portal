@@ -9,7 +9,7 @@ const schema = z.object({
   reportId: z.string().min(1),
   workspaceId: z.string().min(1),
   datasetId: z.string().min(1),
-  rlsRoles: z.array(z.string().min(1)).min(1),
+  rlsRoles: z.array(z.string().min(1)).default([]),
 });
 
 export async function POST(req: Request): Promise<Response> {

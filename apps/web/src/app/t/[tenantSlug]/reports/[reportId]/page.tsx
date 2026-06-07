@@ -48,7 +48,7 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
         reportId: found.id,
         workspaceId: found.workspaceId,
         datasetId: found.datasetId,
-        rlsRoles: ["TenantViewer"],
+        rlsRoles: [],
       }),
     });
     const tokenJson = (await tokenRes.json()) as { embedToken?: string; embedUrl?: string; error?: string };
