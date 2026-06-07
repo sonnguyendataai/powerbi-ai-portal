@@ -37,21 +37,28 @@ export async function createEmbedToken(
     throw new Error(decision.reason ?? "embed denied");
   }
 
-  const identity: EffectiveIdentity = {
-    username: input.user.userId,
-    datasets: [input.datasetId],
-    roles: input.rlsRoles,
-    customData: JSON.stringify({
-      tenantId: input.user.tenantId,
-      roleSource: "portal-rbac",
-      region: input.user.region ?? null,
-    }),
-  };
+  // Only attach effective identity (RLS) when the report has RLS roles configured.
+  // Sending identities for datasets without RLS causes Power BI to return 400.
+  const identities: EffectiveIdentity[] | undefined =
+    input.rlsRoles.length > 0
+      ? [
+          {
+            username: input.user.userId,
+            datasets: [input.datasetId],
+            roles: input.rlsRoles,
+            customData: JSON.stringify({
+              tenantId: input.user.tenantId,
+              roleSource: "portal-rbac",
+              region: input.user.region ?? null,
+            }),
+          },
+        ]
+      : undefined;
   const bundle = await svc.createEmbedBundle({
     reportId: input.reportId,
     workspaceId: input.workspaceId,
     datasetId: input.datasetId,
-    identities: [identity],
+    identities,
     accessLevel: "View",
   });
   emitAudit({

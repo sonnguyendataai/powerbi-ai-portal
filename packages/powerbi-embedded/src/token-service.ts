@@ -49,16 +49,20 @@ export class PowerBiEmbedTokenService {
     if (!embedUrl) throw new Error("Report metadata missing embedUrl");
 
     const tokenPath = `/groups/${req.workspaceId}/reports/${req.reportId}/GenerateToken`;
+    const tokenBody: Record<string, unknown> = {
+      accessLevel: req.accessLevel,
+    };
+    // Only include identities when RLS roles are configured on the dataset.
+    // Sending identities for a dataset without RLS causes Power BI to return 400 InvalidRequest.
+    if (req.identities && req.identities.length > 0 && (req.identities[0]?.roles.length ?? 0) > 0) {
+      tokenBody.identities = req.identities;
+    }
     const tokenRes = await fetch(
       `${API_BASE}${tokenPath}`,
       {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          accessLevel: req.accessLevel,
-          identities: req.identities,
-          datasetId: req.datasetId,
-        }),
+        body: JSON.stringify(tokenBody),
       },
     );
     if (!tokenRes.ok) {
