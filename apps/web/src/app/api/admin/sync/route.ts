@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminApiKey } from "@/app/api/_lib/admin-auth";
-import { getBiOperationsService } from "@/bi-ops";
+import { getBiOperationsService, flushBiOpsPersistence } from "@/bi-ops";
 import { runPowerBiContentSync } from "@/sync-engine";
 
 const requestSchema = z.discriminatedUnion("mode", [
@@ -44,6 +44,8 @@ export async function POST(req: Request): Promise<Response> {
       ...(parsed.data.mode === "workspace" ? { workspaceId: parsed.data.workspaceId } : {}),
       ...(parsed.data.dryRun !== undefined ? { dryRun: parsed.data.dryRun } : {}),
     });
+    // Wait for DB write to complete so a subsequent GET /runs/:id doesn't race.
+    await flushBiOpsPersistence();
     return NextResponse.json(
       {
         runId: result.runId,
