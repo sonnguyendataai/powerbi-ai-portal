@@ -2,23 +2,41 @@ import { describe, expect, it } from "vitest";
 import { BiOperationsService } from "./service";
 
 describe("BiOperationsService", () => {
-  it("returns default users and exports records", () => {
+  it("starts empty and exports records after upsert", () => {
     const svc = new BiOperationsService();
-    expect(svc.listUsers().length).toBeGreaterThan(0);
-    expect(svc.exportUsers().length).toBeGreaterThan(0);
+    expect(svc.listUsers().length).toBe(0);
+    svc.upsertUser({
+      id: "user-seed",
+      email: "seed@tenant.local",
+      tenantId: "tenant-default",
+      roleIds: [],
+      customFields: {},
+    });
+    expect(svc.listUsers().length).toBe(1);
+    expect(svc.exportUsers().length).toBe(1);
   });
 
   it("assigns permission and resolves reports for user", () => {
     const svc = new BiOperationsService();
+    svc.upsertReport({
+      id: "report-real",
+      workspaceId: "ws-real",
+      datasetId: "ds-real",
+      name: "Real Report",
+      displayName: "Real Report",
+      embedUrl: "https://app.powerbi.com/reportEmbed?reportId=real",
+      pageIds: [],
+      isDeleted: false,
+    });
     svc.upsertUser({
       id: "user-1",
       email: "u1@tenant.local",
       tenantId: "tenant-default",
-      roleIds: ["role-member"],
+      roleIds: [],
       customFields: {},
     });
-    svc.assignPermission({ userId: "user-1", reportId: "report-sales" });
-    expect(svc.listReportsForUser("user-1").map((r) => r.id)).toContain("report-sales");
+    svc.assignPermission({ userId: "user-1", reportId: "report-real" });
+    expect(svc.listReportsForUser("user-1").map((r) => r.id)).toContain("report-real");
   });
 
   it("emits snapshot on mutation", () => {

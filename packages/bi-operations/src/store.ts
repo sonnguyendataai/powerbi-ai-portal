@@ -41,80 +41,13 @@ export interface BiOpsStoreSnapshot {
 }
 
 export function createBiOpsStore(seed?: Partial<BiOpsStoreSnapshot>): BiOpsStore {
-  const roles = new Map<string, BiRole>([
-    ["role-admin", { id: "role-admin", name: "Admin", isRequiredRule: false }],
-    ["role-member", { id: "role-member", name: "Member", isRequiredRule: false }],
-    ["role-analyst", { id: "role-analyst", name: "Analyst", isRequiredRule: true }],
-  ]);
-  const reports = new Map<string, BiReport>([
-    [
-      "report-sales",
-      {
-        id: "report-sales",
-        workspaceId: "ws-main",
-        datasetId: "ds-sales",
-        name: "Sales Overview",
-        displayName: "Sales Overview",
-        embedUrl: "https://app.powerbi.com/reportEmbed?reportId=report-sales",
-        pageIds: ["page-sales-main"],
-        isDeleted: false,
-      },
-    ],
-  ]);
-  const pages = new Map<string, BiPage>([
-    [
-      "page-sales-main",
-      {
-        id: "page-sales-main",
-        reportId: "report-sales",
-        name: "Main",
-        displayName: "Main",
-        isDeleted: false,
-      },
-    ],
-  ]);
-  const datasets = new Map<string, BiDataset>([
-    [
-      "dataset-sales",
-      {
-        id: "dataset-sales",
-        workspaceId: "ws-main",
-        name: "Sales Model",
-        sourceBiId: "dataset-sales",
-        isDeleted: false,
-      },
-    ],
-  ]);
-  const workspaces = new Map<string, BiWorkspace>([
-    [
-      "ws-main",
-      {
-        id: "ws-main",
-        name: "Main Workspace",
-        displayName: "Main Workspace",
-        sourceBiId: "ws-main",
-        isDeleted: false,
-      },
-    ],
-  ]);
-  const rules = new Map<string, BiRule>([
-    [
-      "rule-region-apac",
-      { id: "rule-region-apac", name: "Region APAC", table: "Sales", column: "Region", values: ["APAC"] },
-    ],
-  ]);
-  const users = new Map<string, BiUser>([
-    [
-      "user-admin",
-      {
-        id: "user-admin",
-        email: "admin@datamind.local",
-        tenantId: "tenant-default",
-        roleIds: ["role-admin"],
-        customFields: { department: "BI" },
-      },
-    ],
-  ]);
+  const roles = new Map<string, BiRole>();
+  const reports = new Map<string, BiReport>();
+  const pages = new Map<string, BiPage>();
+  const datasets = new Map<string, BiDataset>();
+  const workspaces = new Map<string, BiWorkspace>();
+  const rules = new Map<string, BiRule>();
+  const users = new Map<string, BiUser>();
 
   if (seed?.roles) {
     for (const role of seed.roles) roles.set(role.id, role);
