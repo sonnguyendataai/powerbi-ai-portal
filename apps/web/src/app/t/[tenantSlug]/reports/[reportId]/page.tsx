@@ -11,19 +11,20 @@ interface ReportRecord {
   embedUrl: string;
 }
 
+// Minimal surface of powerbi-client we use
+interface PowerBiEmbed {
+  on: (event: string, handler: (event: { detail?: { message?: string; errorCode?: string } }) => void) => void;
+  off: (event: string) => void;
+}
 interface PowerBiService {
-  embed: (container: HTMLElement, config: object) => void;
+  embed: (container: HTMLElement, config: object) => PowerBiEmbed;
   reset: (container: HTMLElement) => void;
 }
-
 declare global {
-  interface Window {
-    powerbi?: PowerBiService;
-  }
+  interface Window { powerbi?: PowerBiService; }
 }
 
 let sdkPromise: Promise<PowerBiService> | null = null;
-
 function getPowerBi(): Promise<PowerBiService> {
   if (sdkPromise) return sdkPromise;
   sdkPromise = new Promise<PowerBiService>((resolve, reject) => {
@@ -34,17 +35,16 @@ function getPowerBi(): Promise<PowerBiService> {
     script.async = true;
     const timer = setTimeout(() => {
       sdkPromise = null;
-      reject(new Error("Power BI SDK load timed out. Check network access to cdn.jsdelivr.net."));
+      reject(new Error("Power BI SDK load timed out (15s). CDN may be unreachable."));
     }, 15_000);
     script.onload = () => {
       clearTimeout(timer);
       if (window.powerbi) { resolve(window.powerbi); }
-      else { sdkPromise = null; reject(new Error("SDK loaded but window.powerbi not set.")); }
+      else { sdkPromise = null; reject(new Error("SDK loaded but window.powerbi is not set.")); }
     };
     script.onerror = () => {
-      clearTimeout(timer);
-      sdkPromise = null;
-      reject(new Error("Failed to load Power BI SDK from CDN."));
+      clearTimeout(timer); sdkPromise = null;
+      reject(new Error("Failed to load powerbi-client from cdn.jsdelivr.net."));
     };
     document.head.appendChild(script);
   });
@@ -55,7 +55,7 @@ interface ReportPageProps {
   params: Promise<{ tenantSlug: string; reportId: string }>;
 }
 
-interface EmbedReady {
+interface EmbedData {
   report: ReportRecord;
   embedToken: string;
   embedUrl: string;
@@ -63,100 +63,120 @@ interface EmbedReady {
 
 export default function ReportDetailPage({ params }: ReportPageProps) {
   const { reportId } = use(params);
-  const [embedReady, setEmbedReady] = useState<EmbedReady | null>(null);
+  const [embedData, setEmbedData] = useState<EmbedData | null>(null);
   const [error, setError] = useState("");
-  const [loadingMsg, setLoadingMsg] = useState("Loading report metadata…");
+  const [step, setStep] = useState("Loading report…");
   const [isLoading, setIsLoading] = useState(true);
+  const [reportLoaded, setReportLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Track whether we've called embed() for this token to avoid double-embed
-  const embeddedTokenRef = useRef("");
+  const embedRef = useRef<PowerBiEmbed | null>(null);
+  const tokenRef = useRef("");
 
-  // Phase 1: fetch metadata + token (no DOM interaction)
-  async function fetchEmbedData(): Promise<void> {
+  async function fetchAndEmbed(): Promise<void> {
     setError("");
-    setEmbedReady(null);
+    setReportLoaded(false);
     setIsLoading(true);
-    embeddedTokenRef.current = "";
+    tokenRef.current = "";
 
-    setLoadingMsg("Loading report metadata…");
+    if (containerRef.current && window.powerbi) {
+      window.powerbi.reset(containerRef.current);
+    }
+    embedRef.current = null;
+
+    // Step 1: report list
+    setStep("Loading report metadata…");
     let found: ReportRecord | undefined;
     try {
       const res = await fetch("/api/reports");
       const json = (await res.json()) as { reports?: ReportRecord[] };
       if (!res.ok || !json.reports) { setError("Unable to load report list."); setIsLoading(false); return; }
-      found = json.reports.find((item) => item.id === reportId);
-      if (!found) { setError("Report not found. It may not be synced or assigned to your account."); setIsLoading(false); return; }
+      found = json.reports.find((r) => r.id === reportId);
+      if (!found) { setError("Report not found. It may not be synced or you may not have access."); setIsLoading(false); return; }
     } catch (err) { setError(err instanceof Error ? err.message : "Failed to load reports"); setIsLoading(false); return; }
 
-    setLoadingMsg("Requesting embed token…");
+    // Step 2: embed token
+    setStep("Requesting embed token…");
+    let embedToken: string, embedUrl: string;
     try {
-      const tokenRes = await fetch("/api/embed/token", {
+      const res = await fetch("/api/embed/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reportId: found.id, workspaceId: found.workspaceId, datasetId: found.datasetId, rlsRoles: [] }),
       });
-      const tokenJson = (await tokenRes.json()) as { embedToken?: string; embedUrl?: string; error?: string };
-      if (!tokenRes.ok) { setError(tokenJson.error ?? "Cannot create embed token."); setIsLoading(false); return; }
-      // Setting embedReady triggers Phase 2 via useEffect below
-      setEmbedReady({
-        report: found,
-        embedToken: tokenJson.embedToken ?? "",
-        embedUrl: tokenJson.embedUrl ?? found.embedUrl,
-      });
+      const json = (await res.json()) as { embedToken?: string; embedUrl?: string; error?: string };
+      if (!res.ok) { setError(json.error ?? "Cannot create embed token."); setIsLoading(false); return; }
+      embedToken = json.embedToken ?? "";
+      embedUrl = json.embedUrl ?? found.embedUrl;
     } catch (err) { setError(err instanceof Error ? err.message : "Failed to fetch embed token"); setIsLoading(false); return; }
+
+    setEmbedData({ report: found, embedToken, embedUrl });
+    // Phase 2 happens in useEffect below — after React commits the container to DOM
   }
 
-  // Phase 2: once embedReady is set AND the container div is in the DOM, call pbi.embed()
+  // Phase 2: DOM is committed, container is mounted, now call pbi.embed()
   useEffect(() => {
-    if (!embedReady) return;
-    // Guard: don't re-embed if already embedded this token
-    if (embeddedTokenRef.current === embedReady.embedToken) return;
+    if (!embedData) return;
+    if (tokenRef.current === embedData.embedToken) return; // already embedded
 
     let cancelled = false;
-
-    async function doEmbed() {
-      if (!embedReady) return;
-      setLoadingMsg("Loading Power BI SDK…");
+    (async () => {
+      setStep("Loading Power BI SDK…");
       let pbi: PowerBiService;
-      try {
-        pbi = await getPowerBi();
-      } catch (err) {
-        if (!cancelled) { setError(err instanceof Error ? err.message : "Failed to load Power BI SDK"); setIsLoading(false); }
+      try { pbi = await getPowerBi(); }
+      catch (err) {
+        if (!cancelled) { setError(err instanceof Error ? err.message : "SDK load failed"); setIsLoading(false); }
         return;
       }
-      if (cancelled) return;
+      if (cancelled || !containerRef.current) return;
 
-      if (!containerRef.current) {
-        if (!cancelled) { setError("Embed container not mounted."); setIsLoading(false); }
-        return;
-      }
+      const rect = containerRef.current.getBoundingClientRect();
+      // eslint-disable-next-line no-console
+      console.log("[pbi-embed] container rect:", rect.width, rect.height);
 
-      setLoadingMsg("Initialising embed…");
-      // Reset any prior embed on this container
+      setStep("Embedding report…");
       pbi.reset(containerRef.current);
 
-      pbi.embed(containerRef.current, {
+      const embed = pbi.embed(containerRef.current, {
         type: "report",
-        id: embedReady.report.id,
-        embedUrl: embedReady.embedUrl,
-        accessToken: embedReady.embedToken,
-        tokenType: 1,   // 1 = Embed token (not AAD)
+        id: embedData.report.id,
+        embedUrl: embedData.embedUrl,
+        accessToken: embedData.embedToken,
+        tokenType: 1,        // 1 = Embed token
         settings: {
           panes: {
             filters: { visible: false },
             pageNavigation: { visible: true },
           },
-          background: 2, // 2 = Transparent
+          background: 1,     // 1 = Transparent (BackgroundType.Transparent)
         },
       });
 
-      embeddedTokenRef.current = embedReady.embedToken;
-      if (!cancelled) setIsLoading(false);
-    }
+      embedRef.current = embed;
+      tokenRef.current = embedData.embedToken;
 
-    void doEmbed();
+      embed.on("loaded", () => {
+        if (!cancelled) { setReportLoaded(true); setIsLoading(false); }
+      });
+
+      embed.on("error", (event) => {
+        const msg = event?.detail?.message ?? event?.detail?.errorCode ?? "Unknown Power BI embed error";
+        if (!cancelled) { setError(`Power BI: ${msg}`); setIsLoading(false); }
+      });
+
+      // Safety timeout — if neither loaded nor error fires within 30s
+      const timeout = setTimeout(() => {
+        if (!cancelled && !reportLoaded) {
+          setError("Report did not load within 30 seconds. Check Power BI workspace permissions and that the service principal has access.");
+          setIsLoading(false);
+        }
+      }, 30_000);
+
+      return () => { clearTimeout(timeout); };
+    })();
+
     return () => { cancelled = true; };
-  }, [embedReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedData]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -167,64 +187,62 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
     };
   }, []);
 
-  // Kick off on mount / reportId change
   useEffect(() => {
-    void fetchEmbedData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void fetchAndEmbed();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId]);
 
   return (
     <section>
       <PageHeader
         eyebrow="Report workspace"
-        title={embedReady?.report.displayName ?? "Loading report…"}
+        title={embedData?.report.displayName ?? "Loading report…"}
         description="Power BI report embedded with a short-lived access token."
         actions={
-          <button className="secondary" onClick={() => void fetchEmbedData()} disabled={isLoading}>
-            {isLoading ? loadingMsg : "Refresh token"}
+          <button className="secondary" onClick={() => void fetchAndEmbed()} disabled={isLoading}>
+            {isLoading ? step : "Refresh"}
           </button>
         }
       />
+
       {error ? <Alert>{error}</Alert> : null}
+
       {isLoading && !error ? (
-        <div className="empty-state" style={{ marginBottom: 16 }}>{loadingMsg}</div>
+        <div className="empty-state" style={{ marginBottom: 16 }}>{step}</div>
       ) : null}
 
-      <Surface style={{ marginTop: error || isLoading ? 16 : 0 }}>
-        {embedReady ? (
+      {embedData ? (
+        <Surface>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <div>
               <span className="badge">Power BI report</span>
-              <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}><code>{embedReady.report.id}</code></p>
+              <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}><code>{embedData.report.id}</code></p>
               <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>
-                Workspace <code>{embedReady.report.workspaceId}</code> · Dataset <code>{embedReady.report.datasetId}</code>
+                Workspace <code>{embedData.report.workspaceId}</code> · Dataset <code>{embedData.report.datasetId}</code>
               </p>
             </div>
-            {!isLoading ? <span className="badge success">Token ready</span> : null}
+            {reportLoaded ? <span className="badge success">Loaded</span> : null}
           </div>
-        ) : null}
 
-        {/* Container is always mounted so powerbi-client can measure dimensions.
-            We keep it visible from the start — hiding it with display:none before
-            embed() causes the SDK to silently fail to initialise. */}
-        <div
-          ref={containerRef}
-          style={{
-            width: "100%",
-            height: "75vh",
-            minHeight: 480,
-            borderRadius: "var(--radius)",
-            overflow: "hidden",
-            background: "var(--bg-soft)",
-            // Show once we have a report to embed; hide with opacity to preserve dimensions
-            opacity: embedReady && !isLoading ? 1 : 0,
-            transition: "opacity 0.3s",
-          }}
-        />
-        {!embedReady && !isLoading && !error ? (
-          <EmptyState title="Report not loaded" description="Click Refresh token to reload the report." />
-        ) : null}
-      </Surface>
+          {/* Always in DOM so SDK can measure dimensions. Shown once token is ready. */}
+          <div
+            ref={containerRef}
+            style={{
+              width: "100%",
+              height: "75vh",
+              minHeight: 480,
+              borderRadius: "var(--radius)",
+              overflow: "hidden",
+              background: "var(--bg-soft)",
+              visibility: embedData ? "visible" : "hidden",
+            }}
+          />
+        </Surface>
+      ) : (
+        !isLoading && !error ? (
+          <EmptyState title="No report selected" description="Navigate to a report from the Reports list." />
+        ) : null
+      )}
     </section>
   );
 }
