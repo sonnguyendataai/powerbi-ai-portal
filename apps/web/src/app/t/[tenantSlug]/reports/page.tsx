@@ -196,7 +196,6 @@ function ReportCard({
         </button>
       </div>
       <h3 className="report-card-title">{report.displayName}</h3>
-      <div className="report-card-id">{report.id}</div>
       <div className="report-card-actions">
         <Link className="button" href={`/t/${tenantSlug}/reports/${report.id}`} style={{ flex: 1 }}>
           Open report
