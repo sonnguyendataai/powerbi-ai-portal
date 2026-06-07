@@ -11,7 +11,7 @@ export const embedRequestSchema = z.object({
   reportId: z.string().min(1),
   workspaceId: z.string().min(1),
   datasetId: z.string().min(1),
-  identities: z.array(effectiveIdentitySchema).min(1).max(5),
+  identities: z.array(effectiveIdentitySchema).max(5).optional(),
   accessLevel: z.enum(["View", "Edit", "Create"]).default("View"),
 });
 
