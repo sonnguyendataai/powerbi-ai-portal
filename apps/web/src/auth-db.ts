@@ -5,7 +5,13 @@ import { loadEnv } from "@/env";
 let _authPool: ReturnType<typeof postgres> | undefined;
 function getAuthPool(databaseUrl: string): ReturnType<typeof postgres> {
   if (!_authPool) {
-    _authPool = postgres(databaseUrl, { max: 5, idle_timeout: 30 });
+    _authPool = postgres(databaseUrl, {
+      max: 5,
+      idle_timeout: 30,
+      types: {
+        json: { to: 114, from: [114, 3802], serialize: JSON.stringify, parse: JSON.parse },
+      },
+    });
   }
   return _authPool;
 }

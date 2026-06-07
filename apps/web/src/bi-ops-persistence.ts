@@ -6,12 +6,19 @@ import type { BiOpsStoreSnapshot } from "@portal/bi-operations";
 const SNAPSHOT_KEY = "global";
 const MIGRATION_VERSION = "biops_normalized_v1";
 
-// Singleton pool — reused across requests to avoid connection exhaustion
+// Singleton pool — reused across requests to avoid connection exhaustion.
+// types.json: parse JSONB columns (OID 114/3802) as JS objects, not strings.
 const pools = new Map<string, ReturnType<typeof postgres>>();
 function getPool(databaseUrl: string): ReturnType<typeof postgres> {
   let pool = pools.get(databaseUrl);
   if (!pool) {
-    pool = postgres(databaseUrl, { max: 5, idle_timeout: 30 });
+    pool = postgres(databaseUrl, {
+      max: 5,
+      idle_timeout: 30,
+      types: {
+        json: { to: 114, from: [114, 3802], serialize: JSON.stringify, parse: JSON.parse },
+      },
+    });
     pools.set(databaseUrl, pool);
   }
   return pool;
