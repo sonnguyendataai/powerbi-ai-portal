@@ -7,22 +7,28 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
     return (
       <div className="sidebar-logo">
         <Link className="sidebar-logo-mark" href="/">
-          <div className="sidebar-logo-icon">⚡</div>
-          <div className="sidebar-logo-text">
-            <div className="sidebar-logo-name">DataMind</div>
-            <div className="sidebar-logo-sub">Power BI Portal</div>
-          </div>
+          <Image
+            src="/brand/logodatamind.png"
+            alt="DataMind"
+            width={140}
+            height={40}
+            priority
+            style={{ objectFit: "contain", maxWidth: "100%", height: "auto" }}
+          />
         </Link>
       </div>
     );
   }
   return (
-    <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
-      <div className="sidebar-logo-icon" style={{ width: 44, height: 44, fontSize: 22 }}>⚡</div>
-      <div>
-        <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-0.03em", color: "var(--text)" }}>DataMind</div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Power BI AI Portal</div>
-      </div>
+    <Link href="/" style={{ display: "inline-flex", textDecoration: "none" }}>
+      <Image
+        src="/brand/logodatamind.png"
+        alt="DataMind"
+        width={180}
+        height={52}
+        priority
+        style={{ objectFit: "contain", maxWidth: "100%", height: "auto" }}
+      />
     </Link>
   );
 }

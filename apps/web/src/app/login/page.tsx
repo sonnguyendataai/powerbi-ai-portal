@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui";
 
@@ -48,10 +49,14 @@ export default function LoginPage() {
       {/* Left brand panel */}
       <section className="login-brand">
         <div className="login-brand-top">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div className="sidebar-logo-icon" style={{ width: 38, height: 38, fontSize: 18, borderRadius: 10 }}>⚡</div>
-            <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.02em" }}>DataMind</span>
-          </div>
+          <Image
+            src="/brand/logodatamind.png"
+            alt="DataMind"
+            width={160}
+            height={46}
+            priority
+            style={{ objectFit: "contain", height: "auto" }}
+          />
         </div>
 
         <div className="login-brand-center">
