@@ -36,15 +36,13 @@ export async function loadBiOpsSnapshot(
   return readFromFile(opts.filePath);
 }
 
-export function persistBiOpsSnapshot(
+export async function persistBiOpsSnapshot(
   opts: { filePath: string; databaseUrl?: string },
   snapshot: BiOpsStoreSnapshot,
-): void {
+): Promise<void> {
   writeToFile(opts.filePath, snapshot);
   if (opts.databaseUrl) {
-    writeToDatabase(opts.databaseUrl, snapshot).catch((err) => {
-      console.error("[bi-ops-persistence] DB write failed:", err instanceof Error ? err.message : err);
-    });
+    await writeToDatabase(opts.databaseUrl, snapshot);
   }
 }
 
