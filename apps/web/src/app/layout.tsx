@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ThemeLanguageProvider } from "@/components/ThemeLanguageProvider";
 import "./globals.css";
 
 export const metadata = {
@@ -8,9 +9,11 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <body>
-        {children}
+        <ThemeLanguageProvider>
+          {children}
+        </ThemeLanguageProvider>
       </body>
     </html>
   );

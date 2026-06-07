@@ -3,8 +3,20 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui";
+import { useThemeLang } from "@/components/ThemeLanguageProvider";
+import { SidebarControls } from "@/components/SidebarControls";
+
+const ERROR_KEYS: Record<string, string> = {
+  authentication_required: "You must be signed in to access that page.",
+  tenant_mismatch: "You don't have access to that workspace.",
+  tenant_required: "No workspace found in your session.",
+  sso_state_invalid: "SSO verification failed. Please try again.",
+  sso_not_configured: "Microsoft SSO is not configured.",
+  sso_failed: "Microsoft sign-in failed. Please try again.",
+};
 
 export default function LoginPage() {
+  const { t } = useThemeLang();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -13,15 +25,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get("error") ?? "";
-    const labels: Record<string, string> = {
-      authentication_required: "You must be signed in to access that page.",
-      tenant_mismatch: "You don't have access to that workspace.",
-      tenant_required: "No workspace found in your session.",
-      sso_state_invalid: "SSO verification failed. Please try again.",
-      sso_not_configured: "Microsoft SSO is not configured.",
-      sso_failed: "Microsoft sign-in failed. Please try again.",
-    };
-    setExternalError(labels[value] ?? (value ? `Auth error: ${value}` : ""));
+    setExternalError(ERROR_KEYS[value] ?? (value ? `Auth error: ${value}` : ""));
   }, []);
 
   async function loginLocal(): Promise<void> {
@@ -44,11 +48,18 @@ export default function LoginPage() {
     }
   }
 
+  const features = [
+    { icon: "📊", key: "featureSynced" as const },
+    { icon: "🤖", key: "featureAI" as const },
+    { icon: "🔐", key: "featureRBAC" as const },
+    { icon: "⚡", key: "featureChart" as const },
+  ];
+
   return (
     <main className="login-page">
       {/* Left brand panel */}
       <section className="login-brand">
-        <div className="login-brand-top">
+        <div className="login-brand-top" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Image
             src="/brand/logodatamind.png"
             alt="DataMind"
@@ -57,37 +68,36 @@ export default function LoginPage() {
             priority
             style={{ objectFit: "contain", height: "auto" }}
           />
+          <div className="login-theme-controls">
+            <SidebarControls />
+          </div>
         </div>
 
         <div className="login-brand-center">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Enterprise analytics portal</div>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>{t("enterprisePortal")}</div>
             <h1 className="login-brand-headline">
-              Empowering insights,<br />transforming futures.
+              {t("brandHeadline").split("\n").map((line, i) => (
+                <span key={i}>{line}{i === 0 ? <br /> : null}</span>
+              ))}
             </h1>
             <p className="login-brand-sub" style={{ marginTop: 16 }}>
-              Centralize Power BI content, AI-assisted analytics, governed data workflows,
-              and administration in one modern portal.
+              {t("brandSub")}
             </p>
           </div>
 
           <div className="feature-list">
-            {[
-              { icon: "📊", text: "Synced Power BI reports with live metadata" },
-              { icon: "🤖", text: "Evidence-aware AI analyst powered by Claude" },
-              { icon: "🔐", text: "RBAC governance with tenant isolation" },
-              { icon: "⚡", text: "One-click chart generation and data prep" },
-            ].map((f) => (
-              <div className="feature-item" key={f.text}>
+            {features.map((f) => (
+              <div className="feature-item" key={f.key}>
                 <div className="feature-icon">{f.icon}</div>
-                <span>{f.text}</span>
+                <span>{t(f.key)}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="login-brand-bottom">
-          <span className="badge">Secure SSO + local identity</span>
+          <span className="badge">{t("ssoLocalBadge")}</span>
         </div>
       </section>
 
@@ -95,8 +105,8 @@ export default function LoginPage() {
       <section className="login-form-wrap">
         <div className="login-card">
           <div style={{ marginBottom: 28 }}>
-            <h2 className="login-card-title">Welcome back</h2>
-            <p className="login-card-sub">Sign in to your workspace</p>
+            <h2 className="login-card-title">{t("welcomeBack")}</h2>
+            <p className="login-card-sub">{t("signInToWorkspace")}</p>
           </div>
 
           {(error || externalError) ? (
@@ -108,7 +118,7 @@ export default function LoginPage() {
           <div className="stack">
             <div>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Username
+                {t("username")}
               </label>
               <input
                 value={username}
@@ -120,7 +130,7 @@ export default function LoginPage() {
             </div>
             <div>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Password
+                {t("password")}
               </label>
               <input
                 value={password}
@@ -139,9 +149,9 @@ export default function LoginPage() {
               {busy ? (
                 <>
                   <span style={{ display: "inline-block", animation: "spin 0.7s linear infinite" }}>⟳</span>
-                  Signing in…
+                  {t("signingIn")}
                 </>
-              ) : "Sign in"}
+              ) : t("signIn")}
             </button>
 
             <div className="login-divider">or</div>
@@ -153,12 +163,12 @@ export default function LoginPage() {
                 <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
                 <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
               </svg>
-              Continue with Microsoft AD
+              {t("continueWithMicrosoft")}
             </a>
           </div>
 
           <p style={{ marginTop: 24, fontSize: 12, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.6 }}>
-            Secure access is protected by HMAC-signed sessions and optional PKCE OAuth.
+            {t("loginSecureNote")}
           </p>
         </div>
       </section>

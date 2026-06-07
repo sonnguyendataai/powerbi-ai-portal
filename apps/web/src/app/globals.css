@@ -53,6 +53,104 @@
   --radius-xl: 32px;
 }
 
+/* ─── Light mode overrides ───────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f0f4ff;
+  --bg-soft: #e6ecfa;
+
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.88);
+  --glass-hover: rgba(228, 235, 255, 0.85);
+  --glass-border: rgba(108, 142, 247, 0.18);
+  --glass-border-active: rgba(108, 142, 247, 0.42);
+
+  --text: #0e1633;
+  --text-soft: #3d4f78;
+  --text-muted: #7b90be;
+
+  --brand-glow: rgba(108, 142, 247, 0.2);
+
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning-soft: rgba(202, 138, 4, 0.1);
+  --danger-soft: rgba(220, 38, 38, 0.1);
+
+  --gradient-card: linear-gradient(145deg, rgba(255, 255, 255, 0.7), rgba(240, 246, 255, 0.65));
+  --gradient-surface: linear-gradient(160deg, rgba(255, 255, 255, 0.75), rgba(236, 242, 255, 0.7));
+
+  --shadow-sm: 0 4px 16px rgba(80, 100, 180, 0.1);
+  --shadow: 0 8px 40px rgba(80, 100, 180, 0.13);
+  --shadow-lg: 0 24px 80px rgba(80, 100, 180, 0.16);
+  --glow-brand: 0 0 40px rgba(108, 142, 247, 0.15), 0 0 80px rgba(108, 142, 247, 0.06);
+  --glow-sm: 0 0 20px rgba(108, 142, 247, 0.12);
+}
+
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse 120% 60% at 0% 0%, rgba(108, 142, 247, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(167, 139, 250, 0.08) 0%, transparent 45%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 50%);
+}
+
+[data-theme="light"] .report-frame {
+  background: #f5f7ff;
+}
+
+[data-theme="light"] .login-brand {
+  background: linear-gradient(145deg, rgba(230, 238, 255, 0.98), rgba(210, 225, 255, 0.96));
+}
+
+[data-theme="light"] .login-brand::before {
+  background: radial-gradient(ellipse, rgba(108, 142, 247, 0.15) 0%, transparent 65%);
+}
+
+[data-theme="light"] .login-brand::after {
+  background: radial-gradient(ellipse, rgba(167, 139, 250, 0.1) 0%, transparent 65%);
+}
+
+[data-theme="light"] .login-form-wrap {
+  background: rgba(240, 246, 255, 0.9);
+}
+
+[data-theme="light"] .login-card {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+[data-theme="light"] input[type="text"],
+[data-theme="light"] input[type="password"],
+[data-theme="light"] input[type="email"],
+[data-theme="light"] input[type="search"],
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text);
+}
+
+[data-theme="light"] .sso-button {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="light"] .sso-button:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="light"] .alert {
+  color: #b91c1c;
+}
+
+[data-theme="light"] .alert.success {
+  color: #166534;
+}
+
+[data-theme="light"] .alert.info {
+  color: var(--brand-1);
+}
+
+[data-theme="light"] .nav-signout:hover {
+  background: rgba(220, 38, 38, 0.06);
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
@@ -222,6 +320,49 @@ img { max-width: 100%; }
 }
 
 .nav-spacer { flex: 1; }
+
+/* ─── Sidebar theme/lang controls ───────────── */
+.sidebar-controls {
+  display: flex;
+  gap: 6px;
+  padding: 8px 4px;
+}
+
+.sidebar-control-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.18s;
+  box-shadow: none;
+  min-width: 0;
+}
+
+.sidebar-control-btn:hover {
+  background: var(--glass-hover);
+  border-color: var(--glass-border-active);
+  color: var(--text);
+}
+
+.sidebar-control-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sidebar-control-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
 
 /* ─── Main panel ─────────────────────────────── */
 .main-panel {
@@ -706,6 +847,15 @@ select:focus {
   font-size: 15px;
   line-height: 1.65;
   color: var(--text-soft);
+}
+
+.login-theme-controls .sidebar-controls {
+  padding: 0;
+}
+
+.login-theme-controls .sidebar-control-btn {
+  min-height: 30px;
+  padding: 4px 10px;
 }
 
 .login-form-wrap {
