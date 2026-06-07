@@ -5,8 +5,16 @@ import { checkRateLimit } from "@/app/api/_lib/rate-limit";
 import { resolveSessionUser } from "@/app/api/_lib/session";
 import { loadEnv } from "@/env";
 
+const reportContextSchema = z.object({
+  reportId: z.string().min(1),
+  reportName: z.string().min(1),
+  workspaceId: z.string().min(1),
+  datasetId: z.string().min(1),
+});
+
 const schema = z.object({
   message: z.string().min(1).max(4000),
+  reportContext: reportContextSchema.optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -30,7 +38,7 @@ export async function POST(req: Request): Promise<Response> {
     if (!parsed.success) {
       return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
     }
-    const result = await postChat(user, parsed.data.message);
+    const result = await postChat(user, parsed.data.message, parsed.data.reportContext);
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
     return NextResponse.json(
