@@ -153,27 +153,34 @@ export async function answerDataQuestion(
     metadata: { questionLength: question.length, tools: usedTools, reportId: reportContext?.reportId },
   });
 
-  let answer = evidence[0] ?? "No data context available.";
+  if (!env.ANTHROPIC_API_KEY) {
+    return {
+      answer: "AI analyst is not configured. Please set ANTHROPIC_API_KEY in the environment variables.",
+      evidence,
+      usedTools,
+    };
+  }
 
-  if (env.ANTHROPIC_API_KEY) {
-    try {
-      answer = await generateAnthropicAnswer({
-        apiKey: env.ANTHROPIC_API_KEY,
-        model: env.ANTHROPIC_MODEL,
-        tenantId: user.tenantId,
-        question,
-        intent: "lookup",
-        evidence,
-        ...(reportContext ? { reportContext } : {}),
-      });
-    } catch (err) {
-      emitAudit({
-        kind: "agent.query.llm_error",
-        userId: user.userId,
-        tenantId: user.tenantId,
-        metadata: { message: err instanceof Error ? err.message : "anthropic_error" },
-      });
-    }
+  let answer: string;
+  try {
+    answer = await generateAnthropicAnswer({
+      apiKey: env.ANTHROPIC_API_KEY,
+      model: env.ANTHROPIC_MODEL,
+      tenantId: user.tenantId,
+      question,
+      intent: "lookup",
+      evidence,
+      ...(reportContext ? { reportContext } : {}),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "anthropic_error";
+    emitAudit({
+      kind: "agent.query.llm_error",
+      userId: user.userId,
+      tenantId: user.tenantId,
+      metadata: { message: msg },
+    });
+    throw new Error(`AI analyst failed: ${msg}`);
   }
 
   return { answer, evidence, usedTools };
