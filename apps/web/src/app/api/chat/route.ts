@@ -41,9 +41,8 @@ export async function POST(req: Request): Promise<Response> {
     const result = await postChat(user, parsed.data.message, parsed.data.reportContext);
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "chat_error" },
-      { status: 403 },
-    );
+    const msg = error instanceof Error ? error.message : "chat_error";
+    const status = msg.includes("permission denied") || msg.includes("forbidden") ? 403 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }
