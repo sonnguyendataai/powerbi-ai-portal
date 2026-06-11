@@ -20,6 +20,7 @@ pnpm test
   - Local bootstrap: `LOCAL_AUTH_BOOTSTRAP_USERNAME`, `LOCAL_AUTH_BOOTSTRAP_PASSWORD`, `LOCAL_AUTH_BOOTSTRAP_TENANT_ID`
   - Optional Microsoft AD SSO: `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AZURE_AD_REDIRECT_URI`
   - Database: `DATABASE_URL` or Vercel Supabase-provided `POSTGRES_URL` / `POSTGRES_URL_NON_POOLING`
+  - AI analyst: `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (e.g. `claude-sonnet-4-6`)
 - Readiness probes:
   - `GET /api/health`
   - `GET /api/ready`
@@ -36,7 +37,8 @@ pnpm test
 - App-level RBAC/ABAC and EffectiveIdentity-based RLS for embed
 - Dual auth: local username/password plus Microsoft AD OIDC SSO
 - Role-based admin access via `portal-admin`; admin API keys are no longer part of the product UX
-- AI agent orchestration with MCP + REST adapters
+- AI analyst powered by Claude: calls Power BI REST API directly (no external MCP servers required), grounds answers in live dataset schema
+- Inline AI chat panel embedded in every report view — auto-sends report/dataset context for targeted answers
 - Evidence-first Q&A, data transformation workflows, and chart generation
 - Governance-first architecture with audit, reliability, and compliance hooks
 - Legacy-proven BI administration flows:
@@ -50,8 +52,11 @@ pnpm test
   - diagnostics endpoint for OAuth/workspace/report/pages access troubleshooting
 - DataMind UI/UX:
   - branded login and shell
+  - dark/light theme toggle (persisted in `localStorage`)
+  - English/Vietnamese language toggle (persisted in `localStorage`)
   - auto-loaded report list/history
   - report detail auto-loads metadata and embed token
+  - inline AI chat panel inside report view — passes `reportContext` automatically for dataset-aware answers
 
 ## Auth APIs
 
