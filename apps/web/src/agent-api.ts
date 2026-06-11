@@ -39,68 +39,28 @@ interface PbiTable { name: string; columns: Array<{ name: string; dataType: stri
 interface PbiMeasure { name: string; expression: string }
 
 // Strip [TableName][ColumnName] → ColumnName, or [ColumnName] → ColumnName
+// Power BI executeQueries returns keys in the form "TableName[ColumnName]"
 function cleanDaxKey(k: string): string {
-  if (!k.includes("[")) return k;
-  const last = k.split("[").pop();
-  return last ? last.replace("]", "") : k;
+  const bracket = k.indexOf("[");
+  if (bracket === -1) return k;
+  return k.slice(bracket + 1).replace("]", "");
 }
-
-const AUTO_TABLE_PREFIXES = ["DateTableTemplate_", "LocalDateTable_", "RowNumber-"];
 
 async function fetchDatasetSchema(
   workspaceId: string,
   datasetId: string,
   token: string,
 ): Promise<{ tables: PbiTable[]; measures: PbiMeasure[] }> {
-  // INFO functions via executeQueries work for all dataset types (imported, DirectQuery, Direct Lake).
-  // The REST /tables endpoint only works for push datasets — returns empty for everything else.
-  const [columnsResult, measuresResult] = await Promise.allSettled([
-    executeDaxQuery(
-      workspaceId, datasetId, token,
-      "EVALUATE SELECTCOLUMNS(FILTER(INFO.COLUMNS(), NOT [IsHidden]), \"TableName\", [TableName], \"ColumnName\", [Name], \"DataType\", [DataType])",
-    ),
-    executeDaxQuery(
-      workspaceId, datasetId, token,
-      "EVALUATE SELECTCOLUMNS(INFO.MEASURES(), \"MeasureName\", [Name], \"TableName\", [TableName], \"Expression\", [Expression])",
-    ),
-  ]);
-
-  let tables: PbiTable[] = [];
-  let measures: PbiMeasure[] = [];
-
-  if (columnsResult.status === "fulfilled" && !columnsResult.value.error && columnsResult.value.rows.length > 0) {
-    const tableMap = new Map<string, Array<{ name: string; dataType: string }>>();
-    for (const row of columnsResult.value.rows) {
-      const tableName = String(row["[TableName]"] ?? "");
-      const colName = String(row["[ColumnName]"] ?? "");
-      const dataType = String(row["[DataType]"] ?? "");
-      if (!tableName || !colName) continue;
-      if (AUTO_TABLE_PREFIXES.some((p) => tableName.startsWith(p))) continue;
-      if (!tableMap.has(tableName)) tableMap.set(tableName, []);
-      tableMap.get(tableName)!.push({ name: colName, dataType });
-    }
-    tables = Array.from(tableMap.entries()).map(([name, columns]) => ({ name, columns }));
-  } else {
-    // Fallback: REST /tables endpoint (push datasets only)
-    const res = await fetch(
-      `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/tables`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
-    if (res.ok) {
-      tables = ((await res.json()) as { value: PbiTable[] }).value ?? [];
-    }
-  }
-
-  if (measuresResult.status === "fulfilled" && !measuresResult.value.error) {
-    measures = measuresResult.value.rows
-      .map((row) => ({
-        name: String(row["[MeasureName]"] ?? ""),
-        expression: String(row["[Expression]"] ?? ""),
-      }))
-      .filter((m) => m.name);
-  }
-
-  return { tables, measures };
+  // NOTE: executeQueries does NOT support INFO functions (INFO.COLUMNS, INFO.MEASURES, DMV).
+  // Per Microsoft docs: "Only DAX queries are supported. MDX, INFO functions and DMV queries are not supported."
+  // REST /datasets/{id}/tables only works for Push datasets — returns 200 with empty value[] for everything else.
+  // For imported/DirectQuery/Direct Lake, we return empty schema and rely on schema-free DAX generation.
+  const res = await fetch(
+    `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/tables`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  const tables: PbiTable[] = res.ok ? ((await res.json()) as { value: PbiTable[] }).value ?? [] : [];
+  return { tables, measures: [] };
 }
 
 interface PbiRefreshEntry {
@@ -250,14 +210,17 @@ export async function answerDataQuestion(
           evidence.push(`Dataset refresh: ${statusLine} (${when})`);
         }
 
-        // Execute a DAX query if schema is available and the API key is set for query generation
-        if (schema.tables.length > 0 && env.ANTHROPIC_API_KEY) {
+        // Execute a DAX query — always attempt when credentials exist, with or without schema.
+        // For imported/DirectQuery datasets, schema will be empty; generateDaxQuery uses
+        // the report name as domain context to infer plausible table/column names.
+        if (env.ANTHROPIC_API_KEY) {
           try {
             const daxQuery = await generateDaxQuery({
               apiKey: env.ANTHROPIC_API_KEY,
               model: env.ANTHROPIC_MODEL,
               question,
               schema,
+              reportName: reportContext.reportName,
             });
             usedTools.push("execute_dax_query");
             const { rows, error: daxError } = await executeDaxQuery(

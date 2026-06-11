@@ -27,8 +27,11 @@ RLS: `identities` must be **completely absent** from the GenerateToken request b
 
 Fast path (when `reportContext` is provided by caller):
 - Skip tenant-wide enumeration
-- Fetch only the active dataset schema: `GET /groups/{workspaceId}/datasets/{datasetId}/tables` and `/measures`
-- Build targeted evidence and call Claude with it
+- Attempt schema via `GET /groups/{workspaceId}/datasets/{datasetId}/tables` (only returns data for Push datasets; empty for imported/DirectQuery/Direct Lake — this is expected)
+- Get last refresh status via `GET /groups/{workspaceId}/datasets/{datasetId}/refreshes?$top=1`
+- Generate a DAX query via Claude using report name + question as context (schema used when available, inferred from domain when not)
+- Execute DAX via `POST /groups/{workspaceId}/datasets/{datasetId}/executeQueries` — returns real data rows
+- NOTE: INFO.COLUMNS/INFO.MEASURES/DMV are NOT supported by executeQueries per Microsoft docs; do not attempt them
 
 Slow path (no context): reads portal store + calls `/v1.0/myorg/datasets` and `/reports`
 
