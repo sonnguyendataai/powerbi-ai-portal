@@ -38,22 +38,68 @@ async function fetchPowerBiToken(tenantId: string, clientId: string, clientSecre
 interface PbiTable { name: string; columns: Array<{ name: string; dataType: string }> }
 interface PbiMeasure { name: string; expression: string }
 
+// Strip [TableName][ColumnName] → ColumnName, or [ColumnName] → ColumnName
+function cleanDaxKey(k: string): string {
+  if (!k.includes("[")) return k;
+  const last = k.split("[").pop();
+  return last ? last.replace("]", "") : k;
+}
+
+const AUTO_TABLE_PREFIXES = ["DateTableTemplate_", "LocalDateTable_", "RowNumber-"];
+
 async function fetchDatasetSchema(
   workspaceId: string,
   datasetId: string,
   token: string,
 ): Promise<{ tables: PbiTable[]; measures: PbiMeasure[] }> {
-  const base = `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}`;
-  const [tablesRes, measuresRes] = await Promise.all([
-    fetch(`${base}/tables`, { headers: { Authorization: `Bearer ${token}` } }),
-    fetch(`${base}/measures`, { headers: { Authorization: `Bearer ${token}` } }),
+  // INFO functions via executeQueries work for all dataset types (imported, DirectQuery, Direct Lake).
+  // The REST /tables endpoint only works for push datasets — returns empty for everything else.
+  const [columnsResult, measuresResult] = await Promise.allSettled([
+    executeDaxQuery(
+      workspaceId, datasetId, token,
+      "EVALUATE SELECTCOLUMNS(FILTER(INFO.COLUMNS(), NOT [IsHidden]), \"TableName\", [TableName], \"ColumnName\", [Name], \"DataType\", [DataType])",
+    ),
+    executeDaxQuery(
+      workspaceId, datasetId, token,
+      "EVALUATE SELECTCOLUMNS(INFO.MEASURES(), \"MeasureName\", [Name], \"TableName\", [TableName], \"Expression\", [Expression])",
+    ),
   ]);
-  const tables: PbiTable[] = tablesRes.ok
-    ? ((await tablesRes.json()) as { value: PbiTable[] }).value ?? []
-    : [];
-  const measures: PbiMeasure[] = measuresRes.ok
-    ? ((await measuresRes.json()) as { value: PbiMeasure[] }).value ?? []
-    : [];
+
+  let tables: PbiTable[] = [];
+  let measures: PbiMeasure[] = [];
+
+  if (columnsResult.status === "fulfilled" && !columnsResult.value.error && columnsResult.value.rows.length > 0) {
+    const tableMap = new Map<string, Array<{ name: string; dataType: string }>>();
+    for (const row of columnsResult.value.rows) {
+      const tableName = String(row["[TableName]"] ?? "");
+      const colName = String(row["[ColumnName]"] ?? "");
+      const dataType = String(row["[DataType]"] ?? "");
+      if (!tableName || !colName) continue;
+      if (AUTO_TABLE_PREFIXES.some((p) => tableName.startsWith(p))) continue;
+      if (!tableMap.has(tableName)) tableMap.set(tableName, []);
+      tableMap.get(tableName)!.push({ name: colName, dataType });
+    }
+    tables = Array.from(tableMap.entries()).map(([name, columns]) => ({ name, columns }));
+  } else {
+    // Fallback: REST /tables endpoint (push datasets only)
+    const res = await fetch(
+      `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/tables`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (res.ok) {
+      tables = ((await res.json()) as { value: PbiTable[] }).value ?? [];
+    }
+  }
+
+  if (measuresResult.status === "fulfilled" && !measuresResult.value.error) {
+    measures = measuresResult.value.rows
+      .map((row) => ({
+        name: String(row["[MeasureName]"] ?? ""),
+        expression: String(row["[Expression]"] ?? ""),
+      }))
+      .filter((m) => m.name);
+  }
+
   return { tables, measures };
 }
 
@@ -220,11 +266,9 @@ export async function answerDataQuestion(
             if (daxError) {
               evidence.push(`DAX query failed: ${daxError}`);
             } else if (rows.length > 0) {
-              // Serialize up to 20 rows; keep keys tidy by stripping table prefix
+              // Serialize up to 20 rows; strip [Table][Column] → Column
               const clean = rows.slice(0, 20).map((row) =>
-                Object.fromEntries(
-                  Object.entries(row).map(([k, v]) => [k.includes("[") ? k.split("[")[1]?.replace("]", "") ?? k : k, v]),
-                ),
+                Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v])),
               );
               evidence.push(`Query results (${rows.length} row${rows.length === 1 ? "" : "s"}):\n${JSON.stringify(clean, null, 2)}`);
             } else {
