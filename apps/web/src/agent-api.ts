@@ -100,6 +100,16 @@ interface DaxQueryResult {
   error?: PbiQueryError;
 }
 
+function extractPbiErrorMessage(err: PbiQueryError | undefined, httpStatus?: number): string {
+  if (!err) return httpStatus ? `HTTP ${httpStatus}` : "unknown error";
+  // Prefer the human-readable message string over codes
+  const fromDetails = err.pbi_error?.details?.[0]?.detail?.value;
+  const fromMessage = err.message;
+  const fromPbiCode = err.pbi_error?.code;
+  const fromCode = err.code;
+  return fromDetails ?? fromMessage ?? fromPbiCode ?? fromCode ?? (httpStatus ? `HTTP ${httpStatus}` : "unknown error");
+}
+
 async function executeDaxQuery(
   workspaceId: string,
   datasetId: string,
@@ -119,36 +129,21 @@ async function executeDaxQuery(
   );
   const json = (await res.json()) as DaxQueryResult;
 
-  // Top-level error (auth, rate limit, etc.)
+  // Top-level error: HTTP 4xx/5xx — auth failure, tenant setting disabled, insufficient scope
   if (!res.ok || json.error) {
-    const detail =
-      json.error?.pbi_error?.details?.[0]?.detail?.value ??
-      json.error?.pbi_error?.code ??
-      json.error?.code ??
-      `HTTP ${res.status}`;
-    return { rows: [], error: detail };
+    return { rows: [], error: extractPbiErrorMessage(json.error, res.status) };
   }
 
-  // Per-query error (HTTP 200 but DAX failed — wrong table/column name is here, not in json.error)
+  // Per-query error: HTTP 200 but DAX evaluation failed (wrong table/column name lands here)
   const queryResult = json.results?.[0];
   if (queryResult?.error) {
-    const detail =
-      queryResult.error.pbi_error?.details?.[0]?.detail?.value ??
-      queryResult.error.pbi_error?.code ??
-      queryResult.error.code ??
-      "DAX query error";
-    return { rows: [], error: detail };
+    return { rows: [], error: extractPbiErrorMessage(queryResult.error) };
   }
 
-  // Per-table error (can coexist with partial rows)
+  // Per-table error: partial success — some rows may exist alongside an error
   const tableResult = queryResult?.tables?.[0];
   if (tableResult?.error) {
-    const detail =
-      tableResult.error.pbi_error?.details?.[0]?.detail?.value ??
-      tableResult.error.pbi_error?.code ??
-      tableResult.error.code ??
-      "DAX table error";
-    return { rows: tableResult.rows ?? [], error: detail };
+    return { rows: tableResult.rows ?? [], error: extractPbiErrorMessage(tableResult.error) };
   }
 
   return { rows: tableResult?.rows ?? [] };
@@ -243,55 +238,70 @@ export async function answerDataQuestion(
           evidence.push(`Dataset refresh: ${statusLine} (${when})`);
         }
 
-        // Execute a DAX query — always attempt when credentials exist, with or without schema.
-        // Retry once with the error message fed back to Claude if the first query fails —
-        // Power BI returns the wrong-table-name error inside results[0].error (HTTP 200),
-        // so the error text is the key signal for correction.
+        // Probe first with a trivial query to confirm executeQueries is permitted.
+        // "DatasetExecuteQueriesError" as a top-level error code means the tenant setting
+        // "Dataset Execute Queries REST API" is disabled, or the service principal lacks
+        // Dataset.Read.All scope — no point generating DAX if the API gate is closed.
         if (env.ANTHROPIC_API_KEY) {
-          try {
-            usedTools.push("execute_dax_query");
-            let daxQuery = await generateDaxQuery({
-              apiKey: env.ANTHROPIC_API_KEY,
-              model: env.ANTHROPIC_MODEL,
-              question,
-              schema,
-              reportName: reportContext.reportName,
-            });
+          const probe = await executeDaxQuery(
+            reportContext.workspaceId, reportContext.datasetId, token,
+            "EVALUATE ROW(\"ok\", 1)",
+          );
+          const apiBlocked = !!probe.error && probe.rows.length === 0;
 
-            let { rows, error: daxError } = await executeDaxQuery(
-              reportContext.workspaceId, reportContext.datasetId, token, daxQuery,
+          if (apiBlocked) {
+            evidence.push(
+              `executeQueries API blocked: ${probe.error}. ` +
+              "Likely cause: tenant setting 'Dataset Execute Queries REST API' is disabled (Power BI Admin > Integration settings), " +
+              "or service principal lacks Dataset.Read.All scope.",
             );
-
-            // Retry once: feed the error back to Claude so it can correct table/column names
-            if (daxError && !rows.length) {
-              usedTools.push("execute_dax_query_retry");
-              daxQuery = await generateDaxQuery({
+          } else {
+            // API is open — generate and execute the real DAX query with one retry on name errors
+            try {
+              usedTools.push("execute_dax_query");
+              let daxQuery = await generateDaxQuery({
                 apiKey: env.ANTHROPIC_API_KEY,
                 model: env.ANTHROPIC_MODEL,
                 question,
                 schema,
                 reportName: reportContext.reportName,
-                previousError: daxError,
-                previousQuery: daxQuery,
               });
-              ({ rows, error: daxError } = await executeDaxQuery(
-                reportContext.workspaceId, reportContext.datasetId, token, daxQuery,
-              ));
-            }
 
-            if (rows.length > 0) {
-              const clean = rows.slice(0, 20).map((row) =>
-                Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v])),
+              let { rows, error: daxError } = await executeDaxQuery(
+                reportContext.workspaceId, reportContext.datasetId, token, daxQuery,
               );
-              evidence.push(`Query results (${rows.length} row${rows.length === 1 ? "" : "s"}):\n${JSON.stringify(clean, null, 2)}`);
-              if (daxError) evidence.push(`(partial result — query warning: ${daxError})`);
-            } else if (daxError) {
-              evidence.push(`DAX query failed after retry: ${daxError}`);
-            } else {
-              evidence.push("DAX query returned no rows.");
+
+              // Retry once: feed the error and failed query back so Claude can fix table/column names
+              if (daxError && !rows.length) {
+                usedTools.push("execute_dax_query_retry");
+                daxQuery = await generateDaxQuery({
+                  apiKey: env.ANTHROPIC_API_KEY,
+                  model: env.ANTHROPIC_MODEL,
+                  question,
+                  schema,
+                  reportName: reportContext.reportName,
+                  previousError: daxError,
+                  previousQuery: daxQuery,
+                });
+                ({ rows, error: daxError } = await executeDaxQuery(
+                  reportContext.workspaceId, reportContext.datasetId, token, daxQuery,
+                ));
+              }
+
+              if (rows.length > 0) {
+                const clean = rows.slice(0, 20).map((row) =>
+                  Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v])),
+                );
+                evidence.push(`Query results (${rows.length} row${rows.length === 1 ? "" : "s"}):\n${JSON.stringify(clean, null, 2)}`);
+                if (daxError) evidence.push(`(partial result — query warning: ${daxError})`);
+              } else if (daxError) {
+                evidence.push(`DAX query failed after retry: ${daxError}`);
+              } else {
+                evidence.push("DAX query returned no rows.");
+              }
+            } catch (err) {
+              evidence.push(`DAX generation/execution failed: ${err instanceof Error ? err.message : "unknown"}`);
             }
-          } catch (err) {
-            evidence.push(`DAX generation/execution failed: ${err instanceof Error ? err.message : "unknown"}`);
           }
         }
       }
