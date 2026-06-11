@@ -2,7 +2,7 @@ import { PolicyEngine, emitAudit } from "@portal/agent-core";
 import type { SessionUser } from "./auth";
 import { buildResource } from "./auth";
 import { loadEnv } from "./env";
-import { generateAnthropicAnswer } from "./llm-anthropic";
+import { generateAnthropicAnswer, generateDaxQuery } from "./llm-anthropic";
 import { getBiOperationsService } from "./bi-ops";
 
 export interface ChatAnswer {
@@ -57,6 +57,64 @@ async function fetchDatasetSchema(
   return { tables, measures };
 }
 
+interface PbiRefreshEntry {
+  requestId?: string;
+  refreshType?: string;
+  startTime?: string;
+  endTime?: string;
+  status?: string;
+  serviceExceptionJson?: string;
+}
+
+async function fetchRefreshStatus(
+  workspaceId: string,
+  datasetId: string,
+  token: string,
+): Promise<PbiRefreshEntry | undefined> {
+  const res = await fetch(
+    `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/refreshes?$top=1`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) return undefined;
+  const json = (await res.json()) as { value?: PbiRefreshEntry[] };
+  return json.value?.[0];
+}
+
+interface DaxQueryResult {
+  results?: Array<{ tables?: Array<{ rows?: Array<Record<string, unknown>> }> }>;
+  error?: { code?: string; pbi_error?: { code?: string; details?: Array<{ detail?: { value?: string } }> } };
+}
+
+async function executeDaxQuery(
+  workspaceId: string,
+  datasetId: string,
+  token: string,
+  daxQuery: string,
+): Promise<{ rows: Array<Record<string, unknown>>; error?: string }> {
+  const res = await fetch(
+    `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/executeQueries`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        queries: [{ query: daxQuery }],
+        serializerSettings: { includeNulls: true },
+      }),
+    },
+  );
+  const json = (await res.json()) as DaxQueryResult;
+  if (!res.ok || json.error) {
+    const detail =
+      json.error?.pbi_error?.details?.[0]?.detail?.value ??
+      json.error?.pbi_error?.code ??
+      json.error?.code ??
+      `HTTP ${res.status}`;
+    return { rows: [], error: detail };
+  }
+  const rows = json.results?.[0]?.tables?.[0]?.rows ?? [];
+  return { rows };
+}
+
 interface PbiDataset { id: string; name: string }
 interface PbiReport { id: string; name: string; datasetId: string }
 
@@ -99,26 +157,83 @@ export async function answerDataQuestion(
     evidence.push(`Workspace ID: ${reportContext.workspaceId}`);
     evidence.push(`Dataset ID: ${reportContext.datasetId}`);
 
-    // Enrich with live dataset schema if credentials are available
+    // Enrich with live schema, refresh status, and DAX query results
     if (env.POWERBI_TENANT_ID && env.POWERBI_CLIENT_ID && env.POWERBI_CLIENT_SECRET) {
+      let token: string;
       try {
-        const token = await fetchPowerBiToken(
+        token = await fetchPowerBiToken(
           env.POWERBI_TENANT_ID, env.POWERBI_CLIENT_ID, env.POWERBI_CLIENT_SECRET,
         );
-        usedTools.push("get_dataset_schema");
-        const schema = await fetchDatasetSchema(reportContext.workspaceId, reportContext.datasetId, token);
-        if (schema.tables.length > 0) {
-          const tablesSummary = schema.tables
-            .slice(0, 8)
-            .map((t) => `${t.name}(${t.columns.slice(0, 6).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
-            .join("; ");
-          evidence.push(`Dataset schema — tables: ${tablesSummary}`);
-        }
-        if (schema.measures.length > 0) {
-          evidence.push(`Measures: ${schema.measures.slice(0, 10).map((m) => m.name).join(", ")}`);
-        }
       } catch (err) {
-        evidence.push(`Schema fetch failed: ${err instanceof Error ? err.message : "unknown"}`);
+        evidence.push(`Power BI auth failed: ${err instanceof Error ? err.message : "unknown"}`);
+        token = "";
+      }
+
+      if (token) {
+        // Schema + refresh status run in parallel
+        const [schemaResult, refreshEntry] = await Promise.allSettled([
+          fetchDatasetSchema(reportContext.workspaceId, reportContext.datasetId, token),
+          fetchRefreshStatus(reportContext.workspaceId, reportContext.datasetId, token),
+        ]);
+
+        let schema: { tables: PbiTable[]; measures: PbiMeasure[] } = { tables: [], measures: [] };
+        if (schemaResult.status === "fulfilled") {
+          usedTools.push("get_dataset_schema");
+          schema = schemaResult.value;
+          if (schema.tables.length > 0) {
+            const tablesSummary = schema.tables
+              .slice(0, 8)
+              .map((t) => `${t.name}(${t.columns.slice(0, 6).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
+              .join("; ");
+            evidence.push(`Dataset schema — tables: ${tablesSummary}`);
+          }
+          if (schema.measures.length > 0) {
+            evidence.push(`Measures: ${schema.measures.slice(0, 10).map((m) => m.name).join(", ")}`);
+          }
+        } else {
+          evidence.push(`Schema fetch failed: ${schemaResult.reason instanceof Error ? schemaResult.reason.message : "unknown"}`);
+        }
+
+        if (refreshEntry.status === "fulfilled" && refreshEntry.value) {
+          usedTools.push("get_refresh_status");
+          const r = refreshEntry.value;
+          const when = r.endTime ?? r.startTime ?? "unknown time";
+          const statusLine = r.status === "Failed" && r.serviceExceptionJson
+            ? `Failed — ${r.serviceExceptionJson.slice(0, 120)}`
+            : (r.status ?? "Unknown");
+          evidence.push(`Dataset refresh: ${statusLine} (${when})`);
+        }
+
+        // Execute a DAX query if schema is available and the API key is set for query generation
+        if (schema.tables.length > 0 && env.ANTHROPIC_API_KEY) {
+          try {
+            const daxQuery = await generateDaxQuery({
+              apiKey: env.ANTHROPIC_API_KEY,
+              model: env.ANTHROPIC_MODEL,
+              question,
+              schema,
+            });
+            usedTools.push("execute_dax_query");
+            const { rows, error: daxError } = await executeDaxQuery(
+              reportContext.workspaceId, reportContext.datasetId, token, daxQuery,
+            );
+            if (daxError) {
+              evidence.push(`DAX query failed: ${daxError}`);
+            } else if (rows.length > 0) {
+              // Serialize up to 20 rows; keep keys tidy by stripping table prefix
+              const clean = rows.slice(0, 20).map((row) =>
+                Object.fromEntries(
+                  Object.entries(row).map(([k, v]) => [k.includes("[") ? k.split("[")[1]?.replace("]", "") ?? k : k, v]),
+                ),
+              );
+              evidence.push(`Query results (${rows.length} row${rows.length === 1 ? "" : "s"}):\n${JSON.stringify(clean, null, 2)}`);
+            } else {
+              evidence.push("DAX query returned no rows.");
+            }
+          } catch (err) {
+            evidence.push(`DAX generation/execution failed: ${err instanceof Error ? err.message : "unknown"}`);
+          }
+        }
       }
     }
   } else {
