@@ -86,9 +86,18 @@ async function fetchRefreshStatus(
   return json.value?.[0];
 }
 
+interface PbiQueryError {
+  code?: string;
+  message?: string;
+  pbi_error?: { code?: string; details?: Array<{ detail?: { value?: string } }> };
+}
+
 interface DaxQueryResult {
-  results?: Array<{ tables?: Array<{ rows?: Array<Record<string, unknown>> }> }>;
-  error?: { code?: string; pbi_error?: { code?: string; details?: Array<{ detail?: { value?: string } }> } };
+  results?: Array<{
+    tables?: Array<{ rows?: Array<Record<string, unknown>>; error?: PbiQueryError }>;
+    error?: PbiQueryError;
+  }>;
+  error?: PbiQueryError;
 }
 
 async function executeDaxQuery(
@@ -109,6 +118,8 @@ async function executeDaxQuery(
     },
   );
   const json = (await res.json()) as DaxQueryResult;
+
+  // Top-level error (auth, rate limit, etc.)
   if (!res.ok || json.error) {
     const detail =
       json.error?.pbi_error?.details?.[0]?.detail?.value ??
@@ -117,8 +128,30 @@ async function executeDaxQuery(
       `HTTP ${res.status}`;
     return { rows: [], error: detail };
   }
-  const rows = json.results?.[0]?.tables?.[0]?.rows ?? [];
-  return { rows };
+
+  // Per-query error (HTTP 200 but DAX failed — wrong table/column name is here, not in json.error)
+  const queryResult = json.results?.[0];
+  if (queryResult?.error) {
+    const detail =
+      queryResult.error.pbi_error?.details?.[0]?.detail?.value ??
+      queryResult.error.pbi_error?.code ??
+      queryResult.error.code ??
+      "DAX query error";
+    return { rows: [], error: detail };
+  }
+
+  // Per-table error (can coexist with partial rows)
+  const tableResult = queryResult?.tables?.[0];
+  if (tableResult?.error) {
+    const detail =
+      tableResult.error.pbi_error?.details?.[0]?.detail?.value ??
+      tableResult.error.pbi_error?.code ??
+      tableResult.error.code ??
+      "DAX table error";
+    return { rows: tableResult.rows ?? [], error: detail };
+  }
+
+  return { rows: tableResult?.rows ?? [] };
 }
 
 interface PbiDataset { id: string; name: string }
@@ -211,29 +244,49 @@ export async function answerDataQuestion(
         }
 
         // Execute a DAX query — always attempt when credentials exist, with or without schema.
-        // For imported/DirectQuery datasets, schema will be empty; generateDaxQuery uses
-        // the report name as domain context to infer plausible table/column names.
+        // Retry once with the error message fed back to Claude if the first query fails —
+        // Power BI returns the wrong-table-name error inside results[0].error (HTTP 200),
+        // so the error text is the key signal for correction.
         if (env.ANTHROPIC_API_KEY) {
           try {
-            const daxQuery = await generateDaxQuery({
+            usedTools.push("execute_dax_query");
+            let daxQuery = await generateDaxQuery({
               apiKey: env.ANTHROPIC_API_KEY,
               model: env.ANTHROPIC_MODEL,
               question,
               schema,
               reportName: reportContext.reportName,
             });
-            usedTools.push("execute_dax_query");
-            const { rows, error: daxError } = await executeDaxQuery(
+
+            let { rows, error: daxError } = await executeDaxQuery(
               reportContext.workspaceId, reportContext.datasetId, token, daxQuery,
             );
-            if (daxError) {
-              evidence.push(`DAX query failed: ${daxError}`);
-            } else if (rows.length > 0) {
-              // Serialize up to 20 rows; strip [Table][Column] → Column
+
+            // Retry once: feed the error back to Claude so it can correct table/column names
+            if (daxError && !rows.length) {
+              usedTools.push("execute_dax_query_retry");
+              daxQuery = await generateDaxQuery({
+                apiKey: env.ANTHROPIC_API_KEY,
+                model: env.ANTHROPIC_MODEL,
+                question,
+                schema,
+                reportName: reportContext.reportName,
+                previousError: daxError,
+                previousQuery: daxQuery,
+              });
+              ({ rows, error: daxError } = await executeDaxQuery(
+                reportContext.workspaceId, reportContext.datasetId, token, daxQuery,
+              ));
+            }
+
+            if (rows.length > 0) {
               const clean = rows.slice(0, 20).map((row) =>
                 Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v])),
               );
               evidence.push(`Query results (${rows.length} row${rows.length === 1 ? "" : "s"}):\n${JSON.stringify(clean, null, 2)}`);
+              if (daxError) evidence.push(`(partial result — query warning: ${daxError})`);
+            } else if (daxError) {
+              evidence.push(`DAX query failed after retry: ${daxError}`);
             } else {
               evidence.push("DAX query returned no rows.");
             }

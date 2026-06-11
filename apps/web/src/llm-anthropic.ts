@@ -17,6 +17,8 @@ export interface DaxQueryInput {
   question: string;
   reportName: string;
   schema: { tables: Array<{ name: string; columns: Array<{ name: string; dataType: string }> }>; measures: Array<{ name: string; expression: string }> };
+  previousQuery?: string;
+  previousError?: string;
 }
 
 const SYSTEM_PROMPT =
@@ -112,6 +114,9 @@ export async function generateDaxQuery(input: DaxQueryInput): Promise<string> {
           `Report: "${input.reportName}"\n\n` +
           `Schema:\n${tablesSummary}\n\n` +
           (measuresSummary ? `Known measures: ${measuresSummary}\n\n` : "") +
+          (input.previousQuery && input.previousError
+            ? `PREVIOUS ATTEMPT FAILED:\nQuery: ${input.previousQuery}\nError: ${input.previousError}\n\nThe table or column names above were wrong. Use the error message to infer the correct names and write a corrected query.\n\n`
+            : "") +
           `Question: ${input.question}\n\n` +
           "Write the DAX EVALUATE query to answer this question. Return only the EVALUATE statement.",
       },
