@@ -76,11 +76,11 @@ export async function generateDaxQuery(input: DaxQueryInput): Promise<string> {
   const hasSchema = input.schema.tables.length > 0;
   const tablesSummary = hasSchema
     ? input.schema.tables
-        .slice(0, 10)
-        .map((t) => `${t.name}(${t.columns.slice(0, 10).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
+        .slice(0, 50)
+        .map((t) => `${t.name}(${t.columns.slice(0, 30).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
         .join("\n")
     : "(schema not available — infer from report name and question context)";
-  const measuresSummary = input.schema.measures.slice(0, 20).map((m) => `[${m.name}]`).join(", ");
+  const measuresSummary = input.schema.measures.slice(0, 60).map((m) => `[${m.name}]`).join(", ");
 
   const schemaInstruction = hasSchema
     ? "Every referenced table and column MUST exist exactly as listed in the schema above."

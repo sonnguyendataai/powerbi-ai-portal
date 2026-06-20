@@ -51,16 +51,69 @@ async function fetchDatasetSchema(
   datasetId: string,
   token: string,
 ): Promise<{ tables: PbiTable[]; measures: PbiMeasure[] }> {
-  // NOTE: executeQueries does NOT support INFO functions (INFO.COLUMNS, INFO.MEASURES, DMV).
-  // Per Microsoft docs: "Only DAX queries are supported. MDX, INFO functions and DMV queries are not supported."
-  // REST /datasets/{id}/tables only works for Push datasets — returns 200 with empty value[] for everything else.
-  // For imported/DirectQuery/Direct Lake, we return empty schema and rely on schema-free DAX generation.
+  // Fetch the live semantic-model schema via the DAX INFO.VIEW.* functions.
+  //
+  // Why not REST /datasets/{id}/tables: it only returns data for Push datasets;
+  // imported / DirectQuery / Direct Lake models return an empty list, leaving
+  // the DAX generator to GUESS table and column names — the root cause of
+  // "Cannot find table 'Date'".
+  //
+  // Why INFO.VIEW.* and not INFO.COLUMNS/INFO.MEASURES: executeQueries blocks
+  // the DMV-style INFO functions ("INFO functions and DMV queries are not
+  // supported"), but INFO.VIEW.TABLES/COLUMNS/MEASURES are real DAX functions
+  // (per Microsoft docs they work in calculated tables/columns/measures), so
+  // they execute through executeQueries. Requires a recent compatibility level;
+  // on older models the query errors and we fall back to schema-free generation.
+  // Keep hidden columns/measures: they are still queryable in DAX, and date
+  // dimensions or key columns are often hidden — excluding them would recreate
+  // the "Cannot find table 'Date'" failure. Only drop the internal RowNumber
+  // column, which cannot be referenced in a query.
+  const [colsRes, measuresRes] = await Promise.all([
+    executeDaxQuery(
+      workspaceId, datasetId, token,
+      'EVALUATE SELECTCOLUMNS(FILTER(INFO.VIEW.COLUMNS(), [DataCategory] <> "RowNumber"), "Table", [Table], "Column", [Name], "DataType", [DataType])',
+    ),
+    executeDaxQuery(
+      workspaceId, datasetId, token,
+      'EVALUATE SELECTCOLUMNS(INFO.VIEW.MEASURES(), "Table", [Table], "Measure", [Name])',
+    ),
+  ]);
+
+  const tableMap = new Map<string, PbiTable>();
+  for (const row of colsRes.rows) {
+    const clean = Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v]));
+    const tableName = typeof clean.Table === "string" ? clean.Table : "";
+    const columnName = typeof clean.Column === "string" ? clean.Column : "";
+    const dataType = typeof clean.DataType === "string" ? clean.DataType : "";
+    if (!tableName || !columnName) continue;
+    let entry = tableMap.get(tableName);
+    if (!entry) {
+      entry = { name: tableName, columns: [] };
+      tableMap.set(tableName, entry);
+    }
+    entry.columns.push({ name: columnName, dataType });
+  }
+
+  const measures: PbiMeasure[] = [];
+  for (const row of measuresRes.rows) {
+    const clean = Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v]));
+    const measureName = typeof clean.Measure === "string" ? clean.Measure : "";
+    if (measureName) measures.push({ name: measureName, expression: "" });
+  }
+
+  if (tableMap.size > 0) {
+    return { tables: [...tableMap.values()], measures };
+  }
+
+  // INFO.VIEW.* returned nothing (older compatibility level, or the call
+  // errored). Fall back to the REST /tables endpoint — it only populates for
+  // Push datasets, but it is harmless and better than an empty schema.
   const res = await fetch(
     `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/tables`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   const tables: PbiTable[] = res.ok ? ((await res.json()) as { value: PbiTable[] }).value ?? [] : [];
-  return { tables, measures: [] };
+  return { tables, measures };
 }
 
 interface PbiRefreshEntry {
@@ -237,13 +290,13 @@ export async function answerDataQuestion(
           schema = schemaResult.value;
           if (schema.tables.length > 0) {
             const tablesSummary = schema.tables
-              .slice(0, 8)
-              .map((t) => `${t.name}(${t.columns.slice(0, 6).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
+              .slice(0, 30)
+              .map((t) => `${t.name}(${t.columns.slice(0, 20).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
               .join("; ");
-            evidence.push(`Dataset schema — tables: ${tablesSummary}`);
+            evidence.push(`Dataset schema (${schema.tables.length} tables) — ${tablesSummary}`);
           }
           if (schema.measures.length > 0) {
-            evidence.push(`Measures: ${schema.measures.slice(0, 10).map((m) => m.name).join(", ")}`);
+            evidence.push(`Measures (${schema.measures.length}): ${schema.measures.slice(0, 40).map((m) => m.name).join(", ")}`);
           }
         } else {
           evidence.push(`Schema fetch failed: ${schemaResult.reason instanceof Error ? schemaResult.reason.message : "unknown"}`);
