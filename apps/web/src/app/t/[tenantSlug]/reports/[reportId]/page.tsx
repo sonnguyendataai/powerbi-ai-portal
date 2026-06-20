@@ -163,6 +163,12 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
     }
   }
 
+  function clearChat(): void {
+    setChatMessages([]);
+    setChatError("");
+    setChatInput("");
+  }
+
   const SUGGESTIONS = [
     "What are the key insights from this report?",
     "Summarise the main trends visible here.",
@@ -236,10 +242,30 @@ export default function ReportDetailPage({ params }: ReportPageProps) {
               {/* Chat header */}
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--glass-border)", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 16 }}>🤖</span>
-                <div>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>AI Analyst</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{embedData.report.displayName}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{embedData.report.displayName}</div>
                 </div>
+                {chatMessages.length > 0 ? (
+                  <button
+                    onClick={clearChat}
+                    disabled={chatBusy}
+                    title="Clear conversation"
+                    aria-label="Clear conversation"
+                    style={{
+                      background: "transparent",
+                      border: "1px solid var(--glass-border)",
+                      borderRadius: "var(--radius-xs)",
+                      color: "var(--text-muted)",
+                      fontSize: 11,
+                      padding: "5px 10px",
+                      minHeight: "unset",
+                      boxShadow: "none",
+                      flexShrink: 0,
+                      cursor: chatBusy ? "not-allowed" : "pointer",
+                    }}
+                  >↺ Clear</button>
+                ) : null}
               </div>
 
               {/* Messages */}
