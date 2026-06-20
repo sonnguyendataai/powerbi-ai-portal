@@ -84,11 +84,11 @@ export async function generateDaxQuery(input: DaxQueryInput): Promise<string> {
 
   const schemaInstruction = hasSchema
     ? "Every referenced table and column MUST exist exactly as listed in the schema above."
-    : `No schema is available. Use your knowledge of Power BI HR/business datasets to infer likely table and column names from the report name "${input.reportName}". ` +
-      "Common patterns: fact tables named after the domain (e.g. 'Employee', 'Headcount', 'Turnover'), " +
-      "date dimension named 'Date' or 'Calendar' with a 'Year' column, " +
-      "measure names matching the question topic. If you cannot produce a reliable query, " +
-      "write a query that will surface an informative error rather than wrong data.";
+    : `No schema is available. Infer likely table and column names from the report name "${input.reportName}" and the question itself — do NOT assume any particular business domain. ` +
+      "Derive the domain from the question's nouns (e.g. a question about products/revenue/sales implies fact tables like 'Sales'/'FactSales' with measures like 'Revenue'/'Sales Amount' and a 'Product'/'DimProduct' dimension; a question about employees implies HR tables). " +
+      "Use a date/calendar dimension with a 'Year' column for year filters. " +
+      "Prefer star-schema conventions (fact table + dimension tables). If you cannot produce a reliable query, " +
+      "write one that surfaces an informative error rather than returning wrong data.";
 
   const response = await anthropic.messages.create({
     model: input.model,

@@ -86,10 +86,22 @@ async function fetchRefreshStatus(
   return json.value?.[0];
 }
 
-interface PbiQueryError {
+interface PbiErrorDetail {
+  code?: string;
+  detail?: { type?: number; value?: string };
+}
+interface PbiInnerError {
+  code?: string;
+  details?: PbiErrorDetail[];
+}
+export interface PbiQueryError {
   code?: string;
   message?: string;
-  pbi_error?: { code?: string; details?: Array<{ detail?: { value?: string } }> };
+  // NOTE: the Power BI error envelope key is literally "pbi.error" (with a dot),
+  // not "pbi_error". The human-readable DAX failure (e.g. "Column 'Revenue'
+  // cannot be found") lives in its details[].detail.value. Reading it under the
+  // wrong key silently drops the message and leaves only the generic code.
+  "pbi.error"?: PbiInnerError;
 }
 
 interface DaxQueryResult {
@@ -100,14 +112,23 @@ interface DaxQueryResult {
   error?: PbiQueryError;
 }
 
-function extractPbiErrorMessage(err: PbiQueryError | undefined, httpStatus?: number): string {
+export function extractPbiErrorMessage(err: PbiQueryError | undefined, httpStatus?: number): string {
   if (!err) return httpStatus ? `HTTP ${httpStatus}` : "unknown error";
-  // Prefer the human-readable message string over codes
-  const fromDetails = err.pbi_error?.details?.[0]?.detail?.value;
-  const fromMessage = err.message;
-  const fromPbiCode = err.pbi_error?.code;
+  // Prefer the human-readable detail message over generic codes. The detail
+  // that carries the actual DAX failure text is the longest non-empty value.
+  const inner = err["pbi.error"];
+  const detailValues = (inner?.details ?? [])
+    .map((d) => d.detail?.value)
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  const fromDetails = detailValues.sort((a, b) => b.length - a.length)[0];
+  const fromMessage = err.message && err.message.trim().length > 0 ? err.message : undefined;
+  const fromPbiCode = inner?.code;
   const fromCode = err.code;
-  return fromDetails ?? fromMessage ?? fromPbiCode ?? fromCode ?? (httpStatus ? `HTTP ${httpStatus}` : "unknown error");
+  // Keep the code as a suffix when we also have a message, so the answer can
+  // distinguish an API-gate error from a DAX name error.
+  const primary = fromDetails ?? fromMessage ?? fromPbiCode ?? fromCode;
+  if (primary && fromCode && primary !== fromCode) return `${primary} (${fromCode})`;
+  return primary ?? (httpStatus ? `HTTP ${httpStatus}` : "unknown error");
 }
 
 async function executeDaxQuery(
