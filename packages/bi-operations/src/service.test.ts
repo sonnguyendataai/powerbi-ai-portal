@@ -54,6 +54,41 @@ describe("BiOperationsService", () => {
     expect(snapshots.length).toBe(1);
   });
 
+  it("coalesces many upserts into a single persist when batched", () => {
+    let persists = 0;
+    const svc = new BiOperationsService(undefined, {
+      onMutate: () => {
+        persists += 1;
+      },
+    });
+    svc.runInBatch(() => {
+      for (let i = 0; i < 50; i += 1) {
+        svc.upsertWorkspace({
+          id: `ws-${i}`,
+          name: `ws-${i}`,
+          displayName: `ws-${i}`,
+          sourceBiId: `ws-${i}`,
+          isDeleted: false,
+        });
+      }
+    });
+    expect(svc.listWorkspaces()).toHaveLength(50);
+    expect(persists).toBe(1);
+  });
+
+  it("does not persist when a batch mutates nothing", () => {
+    let persists = 0;
+    const svc = new BiOperationsService(undefined, {
+      onMutate: () => {
+        persists += 1;
+      },
+    });
+    svc.runInBatch(() => {
+      svc.listWorkspaces();
+    });
+    expect(persists).toBe(0);
+  });
+
   it("tracks sync runs and delta items", () => {
     const svc = new BiOperationsService();
     const run = svc.startSyncRun({

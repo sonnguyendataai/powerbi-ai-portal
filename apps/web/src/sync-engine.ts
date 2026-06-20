@@ -22,16 +22,21 @@ export async function runPowerBiContentSync(
     });
     const runDelta = delta.map((item) => ({ ...item, runId: run.id }));
 
-    if (!(request.dryRun ?? false)) {
-      applyRemoteSnapshot(service, snapshot, {
-        mode: request.mode,
-        ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
-      });
-      applySoftDeletes(service, runDelta);
-    }
+    // Batch all writes into a single persist. Each upsert otherwise rewrites the
+    // entire snapshot (truncate + reinsert 11 tables), so a full sync of N
+    // entities does O(N) full rewrites and times out the function.
+    service.runInBatch(() => {
+      if (!(request.dryRun ?? false)) {
+        applyRemoteSnapshot(service, snapshot, {
+          mode: request.mode,
+          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
+        });
+        applySoftDeletes(service, runDelta);
+      }
 
-    service.appendSyncDeltaItems(run.id, runDelta);
-    service.finishSyncRun(run.id, { status: "succeeded" });
+      service.appendSyncDeltaItems(run.id, runDelta);
+      service.finishSyncRun(run.id, { status: "succeeded" });
+    });
     return { runId: run.id, delta: runDelta };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync error";

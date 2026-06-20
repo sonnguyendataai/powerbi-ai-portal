@@ -226,7 +226,34 @@ export class BiOperationsService {
     });
   }
 
+  /**
+   * Suspends per-mutation persistence for the duration of `fn`, then persists
+   * once at the end (only if something actually mutated). Without this, a single
+   * logical operation that performs many upserts (e.g. a full Power BI sync)
+   * triggers one full-snapshot rewrite per upsert — O(N^2) DB work that locks
+   * the same tables repeatedly and times out the serverless function.
+   */
+  runInBatch<T>(fn: () => T): T {
+    this.batchDepth += 1;
+    try {
+      return fn();
+    } finally {
+      this.batchDepth -= 1;
+      if (this.batchDepth === 0 && this.batchDirty) {
+        this.batchDirty = false;
+        this.options.onMutate?.(toSnapshot(this.store));
+      }
+    }
+  }
+
+  private batchDepth = 0;
+  private batchDirty = false;
+
   private persist(): void {
+    if (this.batchDepth > 0) {
+      this.batchDirty = true;
+      return;
+    }
     this.options.onMutate?.(toSnapshot(this.store));
   }
 }
