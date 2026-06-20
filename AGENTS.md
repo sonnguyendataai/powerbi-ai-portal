@@ -25,9 +25,11 @@
 
 - `apps/web` - portal UI and API routes
   - `src/agent-api.ts` — AI Q&A orchestration; calls PBI REST API directly; fast/slow path based on `reportContext`
-  - `src/llm-anthropic.ts` — Claude API wrapper with report-context-aware system prompt
-  - `src/api-chat.ts` — thin wrapper with telemetry around `answerDataQuestion`
-  - `src/bi-ops.ts` — in-memory BI operations service with PostgreSQL persistence
+  - `src/powerbi-schema.ts` — **shared** Power BI helper: service-principal auth, `executeQueries`, error extraction (`extractPbiErrorMessage`), and live schema discovery (`fetchDatasetSchema` via `INFO.VIEW.*`). Used by `agent-api.ts`, `chart-studio.ts`, `data-prep.ts`
+  - `src/llm-anthropic.ts` — Claude API wrapper: report-context-aware answers, DAX generation, chart-spec generation, and data-prep-plan generation (JSON-output helpers)
+  - `src/chart-studio.ts` / `src/data-prep.ts` — Anthropic-backed, schema-grounded chart-spec and transform-plan generators (async; require `ANTHROPIC_API_KEY`)
+  - `src/api-chat.ts` / `src/api-chart.ts` / `src/api-data-prep.ts` — thin telemetry wrappers around the generators
+  - `src/bi-ops.ts` — in-memory BI operations service with PostgreSQL persistence; `reloadBiOperationsService()` reloads the snapshot from DB on a cache miss (fixes cross-instance `run_not_found`)
   - `src/bi-ops-persistence.ts` — DB read/write for `bi_ops_*` tables; must be `await`-ed before sync response
   - `src/embed-api.ts` — embed token generation (omits `identities` when no RLS roles)
   - `src/components/ThemeLanguageProvider.tsx` — dark/light + EN/VI toggle, `localStorage` persistence
@@ -56,11 +58,19 @@
 
 ### AI Analyst
 - `POWERBI_MCP_URL` / `FABRIC_CORE_MCP_URL` are not configured in production — the agent uses Power BI REST API directly.
-- Fast path triggered by passing `reportContext` to `/api/chat`. Frontend always sends context when viewing a specific report.
-- `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` must be set for AI responses. If missing, a clear config message is returned (no silent mock fallback).
+- Fast path triggered by passing `reportContext` to `/api/chat`. Frontend always sends context when viewing a specific report. `/agent` and `/chart-studio` expose a scope selector that sends `reportContext` / workspace+dataset; `/data-prep` sends `workspaceId`.
+- `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` must be set for AI responses (chat, chart, data-prep). If missing, a clear config error is returned/thrown (no silent mock fallback).
+
+### Power BI schema & DAX (`src/powerbi-schema.ts`)
+- Schema discovery uses the **DAX `INFO.VIEW.COLUMNS()` / `INFO.VIEW.MEASURES()`** functions through `executeQueries`. Do NOT use `INFO.COLUMNS` / `INFO.MEASURES` / DMV — `executeQueries` blocks them ("INFO functions and DMV queries are not supported"). The `INFO.VIEW.*` variants are real DAX and execute. Falls back to REST `/tables` (Push datasets only) when `INFO.VIEW.*` returns nothing.
+- REST `/datasets/{id}/tables` alone returns empty for imported/DirectQuery/Direct Lake models — never rely on it as the primary schema source, or the model will guess table names (e.g. `Date`).
+- Keep hidden columns/measures (date dims and keys are often hidden); drop only the internal `RowNumber` column.
+- The `executeQueries` error envelope nests its message under the key `"pbi.error"` (a literal dot, NOT `pbi_error`). Use `extractPbiErrorMessage`; it reads the longest detail value and appends the generic code. A bad DAX query retries once with the real error fed back.
 
 ### Persistence
-- `flushBiOpsPersistence()` is called before the sync route returns 202 to prevent "run_not_found" errors on serverless cold starts.
+- `flushBiOpsPersistence()` is called before the sync route returns 202 to prevent "run_not_found" errors on serverless cold starts (write side).
+- `BiOperationsService.runInBatch(fn)` wraps a multi-upsert operation (e.g. full sync) so it persists **once** at the end. Each `upsert*` otherwise rewrites the entire snapshot (TRUNCATE + reinsert 11 tables) — O(N) rewrites that cause a 504 on large syncs.
+- The in-memory service is cached per warm serverless instance and does not auto-reload. On a sync-run cache miss, the run-detail route calls `reloadBiOperationsService()` (reload snapshot from DB) before returning 404 — fixes cross-instance `run_not_found` (read side).
 
 ### TypeScript
 - `exactOptionalPropertyTypes: true` — use `...(x ? { x } : {})` spread pattern for optional fields, not `x: undefined`.

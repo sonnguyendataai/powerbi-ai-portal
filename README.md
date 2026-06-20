@@ -37,9 +37,10 @@ pnpm test
 - App-level RBAC/ABAC and EffectiveIdentity-based RLS for embed
 - Dual auth: local username/password plus Microsoft AD OIDC SSO
 - Role-based admin access via `portal-admin`; admin API keys are no longer part of the product UX
-- AI analyst powered by Claude: calls Power BI REST API directly (no external MCP servers required), grounds answers in live dataset schema
-- Inline AI chat panel embedded in every report view — auto-sends report/dataset context for targeted answers
-- Evidence-first Q&A, data transformation workflows, and chart generation
+- AI analyst powered by Claude: calls Power BI REST API directly (no external MCP servers required), grounds answers in the live semantic-model schema discovered via the DAX `INFO.VIEW.*` functions, and executes generated DAX with one self-correcting retry
+- Inline AI chat panel embedded in every report view — auto-sends report/dataset context for targeted answers, with a Clear action to reset the conversation
+- Ask DataMind (`/agent`) supports a data-scope selector to ground answers in a specific report/dataset
+- Chart Studio and Data Prep are Claude-backed and schema-grounded: chart specs map to real columns/measures (with visualization best practices), and transform plans reference real columns; both fall back gracefully and surface a clear error when AI is not configured (no silent mock output)
 - Governance-first architecture with audit, reliability, and compliance hooks
 - Legacy-proven BI administration flows:
   - user/role/report/page/rule permission assignments
