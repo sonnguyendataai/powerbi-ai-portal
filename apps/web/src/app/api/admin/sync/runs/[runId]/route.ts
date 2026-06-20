@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApiKey } from "@/app/api/_lib/admin-auth";
-import { getBiOperationsService } from "@/bi-ops";
+import { getBiOperationsService, reloadBiOperationsService } from "@/bi-ops";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +16,14 @@ export async function GET(req: Request, ctx: RouteContext): Promise<Response> {
   const url = new URL(req.url);
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? "200")));
   const offset = Math.max(0, Number(url.searchParams.get("offset") ?? "0"));
-  const service = await getBiOperationsService();
-  const run = service.getSyncRun(runId);
+  let service = await getBiOperationsService();
+  let run = service.getSyncRun(runId);
+  if (!run) {
+    // Cache miss may mean this warm instance never saw a write made by another
+    // instance. Reload the snapshot from the DB once before giving up.
+    service = await reloadBiOperationsService();
+    run = service.getSyncRun(runId);
+  }
   if (!run) {
     return NextResponse.json({ error: "run_not_found" }, { status: 404 });
   }
