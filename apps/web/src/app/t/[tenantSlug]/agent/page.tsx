@@ -1,12 +1,19 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { Alert, Badge, PageHeader } from "@/components/ui";
 
 interface ChatResponse {
   answer: string;
   evidence: string[];
   usedTools: string[];
+}
+
+interface ReportItem {
+  id: string;
+  displayName: string;
+  workspaceId: string;
+  datasetId: string;
 }
 
 const SUGGESTED = [
@@ -23,6 +30,36 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Scope: which report/dataset the agent should ground its answer in.
+  // Empty string = "All data" (tenant-wide enumeration, less precise).
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState("");
+  const [scopeId, setScopeId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setReportsLoading(true);
+      try {
+        const res = await fetch("/api/reports");
+        const json = (await res.json()) as { reports?: ReportItem[]; error?: string };
+        if (!res.ok) throw new Error(json.error ?? "Failed to load reports");
+        if (!cancelled) setReports(json.reports ?? []);
+      } catch (err) {
+        if (!cancelled) setReportsError(err instanceof Error ? err.message : "Failed to load reports");
+      } finally {
+        if (!cancelled) setReportsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedReport = useMemo(
+    () => reports.find((r) => r.id === scopeId),
+    [reports, scopeId],
+  );
+
   async function ask(): Promise<void> {
     if (!question.trim()) return;
     setError("");
@@ -31,7 +68,19 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: question }),
+        body: JSON.stringify({
+          message: question,
+          ...(selectedReport
+            ? {
+                reportContext: {
+                  reportId: selectedReport.id,
+                  reportName: selectedReport.displayName,
+                  workspaceId: selectedReport.workspaceId,
+                  datasetId: selectedReport.datasetId,
+                },
+              }
+            : {}),
+        }),
       });
       const json = (await res.json()) as ChatResponse & { error?: string };
       if (!res.ok) {
@@ -39,6 +88,8 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
         return;
       }
       setAnswer(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Chat request failed");
     } finally {
       setLoading(false);
     }
@@ -57,6 +108,35 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="surface" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="surface-title">Your question</div>
+
+            {/* Scope selector — grounds the agent in one report/dataset */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label htmlFor="agent-scope" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>
+                Data scope
+              </label>
+              <select
+                id="agent-scope"
+                value={scopeId}
+                onChange={(e) => setScopeId(e.target.value)}
+                disabled={reportsLoading}
+              >
+                <option value="">
+                  {reportsLoading ? "Loading reports…" : "All data (tenant-wide — less precise)"}
+                </option>
+                {reports.map((r) => (
+                  <option key={r.id} value={r.id}>{r.displayName}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                {selectedReport
+                  ? "The agent queries this report's dataset directly for precise, grounded answers."
+                  : "Select a report to ground answers in its dataset and run live DAX queries."}
+              </span>
+              {reportsError ? (
+                <span style={{ fontSize: 11, color: "var(--danger)" }}>{reportsError}</span>
+              ) : null}
+            </div>
+
             <textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -112,7 +192,12 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
 
         {/* Answer panel */}
         <div className="surface" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div className="surface-title">Answer & evidence</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div className="surface-title" style={{ margin: 0 }}>Answer & evidence</div>
+            {selectedReport ? (
+              <Badge>Scoped: {selectedReport.displayName}</Badge>
+            ) : null}
+          </div>
 
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -133,7 +218,7 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
           ) : answer ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.7, color: "var(--text)" }}>{answer.answer}</p>
+                <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.7, color: "var(--text)", whiteSpace: "pre-wrap" }}>{answer.answer}</p>
               </div>
 
               {answer.evidence.length > 0 ? (
@@ -142,9 +227,9 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
                     Evidence
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {answer.evidence.map((item) => (
+                    {answer.evidence.map((item, i) => (
                       <div
-                        key={item}
+                        key={i}
                         style={{
                           padding: "8px 12px",
                           borderRadius: 8,
@@ -152,6 +237,7 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
                           border: "1px solid rgba(52, 211, 153, 0.15)",
                           fontSize: 13,
                           color: "var(--text-soft)",
+                          whiteSpace: "pre-wrap",
                         }}
                       >
                         {item}
@@ -167,8 +253,8 @@ export default function TenantAgentPage({ params }: { params: Promise<{ tenantSl
                     Tool trace
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {answer.usedTools.map((item) => (
-                      <Badge key={item}>{item}</Badge>
+                    {answer.usedTools.map((item, i) => (
+                      <Badge key={`${item}-${i}`}>{item}</Badge>
                     ))}
                   </div>
                 </div>
