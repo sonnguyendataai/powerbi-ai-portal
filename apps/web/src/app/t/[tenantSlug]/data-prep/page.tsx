@@ -19,11 +19,13 @@ interface ReportItem {
   id: string;
   displayName: string;
   datasetId: string;
+  workspaceId: string;
 }
 
 interface DatasetOption {
   datasetId: string;
   label: string;
+  workspaceId: string;
 }
 
 const INTENT_PRESETS = [
@@ -51,14 +53,14 @@ export default function TenantDataPrepPage({ params }: { params: Promise<{ tenan
         const res = await fetch("/api/reports");
         const json = (await res.json()) as { reports?: ReportItem[] };
         if (!res.ok) throw new Error("Failed to load datasets");
-        // Reports carry the datasetId; dedupe to one option per dataset.
-        const byDataset = new Map<string, string>();
+        // Reports carry the datasetId + workspaceId; dedupe to one option per dataset.
+        const byDataset = new Map<string, DatasetOption>();
         for (const r of json.reports ?? []) {
-          if (r.datasetId && !byDataset.has(r.datasetId)) byDataset.set(r.datasetId, r.displayName);
+          if (r.datasetId && !byDataset.has(r.datasetId)) {
+            byDataset.set(r.datasetId, { datasetId: r.datasetId, label: r.displayName, workspaceId: r.workspaceId });
+          }
         }
-        if (!cancelled) {
-          setDatasets([...byDataset.entries()].map(([id, label]) => ({ datasetId: id, label })));
-        }
+        if (!cancelled) setDatasets([...byDataset.values()]);
       } catch {
         // Non-fatal: user can still type a dataset id manually.
       } finally {
@@ -75,10 +77,11 @@ export default function TenantDataPrepPage({ params }: { params: Promise<{ tenan
     setError("");
     setLoading(true);
     try {
+      const workspaceId = datasets.find((d) => d.datasetId === datasetId)?.workspaceId;
       const res = await fetch("/api/data-prep", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ datasetId, intent }),
+        body: JSON.stringify({ datasetId, intent, ...(workspaceId ? { workspaceId } : {}) }),
       });
       const json = (await res.json()) as PrepResponse & { error?: string };
       if (!res.ok) {

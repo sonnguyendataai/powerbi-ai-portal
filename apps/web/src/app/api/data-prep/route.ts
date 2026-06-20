@@ -6,6 +6,7 @@ import { resolveSessionUser } from "@/app/api/_lib/session";
 const schema = z.object({
   datasetId: z.string().min(1),
   intent: z.string().min(1).max(2000),
+  workspaceId: z.string().min(1).optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -16,12 +17,11 @@ export async function POST(req: Request): Promise<Response> {
     if (!parsed.success) {
       return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
     }
-    const plan = postDataPrep(user, parsed.data);
+    const plan = await postDataPrep(user, parsed.data);
     return NextResponse.json(plan, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "data_prep_error" },
-      { status: 403 },
-    );
+    const msg = error instanceof Error ? error.message : "data_prep_error";
+    const status = msg.includes("denied") || msg.includes("forbidden") ? 403 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

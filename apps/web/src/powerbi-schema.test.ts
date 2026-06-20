@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractPbiErrorMessage, type PbiQueryError } from "./agent-api";
+import { extractPbiErrorMessage, type PbiQueryError } from "./powerbi-schema";
 
 describe("extractPbiErrorMessage", () => {
   it("reads the human-readable detail from the 'pbi.error' envelope (dot, not underscore)", () => {

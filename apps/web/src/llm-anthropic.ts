@@ -129,3 +129,193 @@ export async function generateDaxQuery(input: DaxQueryInput): Promise<string> {
   if (!text.toUpperCase().startsWith("EVALUATE")) throw new Error(`Generated text is not a DAX query: ${text.slice(0, 80)}`);
   return text;
 }
+
+// Extract a JSON object from a model response that may wrap it in prose or
+// ```json fences. Returns the parsed object or throws.
+function parseJsonObject(raw: string): Record<string, unknown> {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] ?? raw).trim();
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error(`Model did not return JSON: ${candidate.slice(0, 80)}`);
+  }
+  return JSON.parse(candidate.slice(start, end + 1)) as Record<string, unknown>;
+}
+
+export interface SchemaInput {
+  tables: Array<{ name: string; columns: Array<{ name: string; dataType: string }> }>;
+  measures: Array<{ name: string; expression: string }>;
+}
+
+export interface ChartSpecInput {
+  apiKey: string;
+  model: string;
+  prompt: string;
+  schema: SchemaInput;
+  reportName?: string;
+}
+
+export interface GeneratedChartSpec {
+  title: string;
+  chartType: "bar" | "line" | "area" | "scatter" | "table";
+  x: string;
+  y: string;
+  filters: Array<{ field: string; operator: "eq" | "in" | "between"; values: string[] }>;
+  rationale?: string;
+}
+
+const CHART_TYPES = ["bar", "line", "area", "scatter", "table"] as const;
+
+export async function generateChartSpec(input: ChartSpecInput): Promise<GeneratedChartSpec> {
+  const anthropic = new Anthropic({ apiKey: input.apiKey });
+  const hasSchema = input.schema.tables.length > 0;
+  const schemaText = hasSchema
+    ? input.schema.tables
+        .slice(0, 50)
+        .map((t) => `${t.name}(${t.columns.slice(0, 30).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
+        .join("\n")
+    : "(schema unavailable — infer reasonable field names from the prompt)";
+  const measuresText = input.schema.measures.slice(0, 60).map((m) => `[${m.name}]`).join(", ");
+
+  const response = await anthropic.messages.create({
+    model: input.model,
+    max_tokens: 600,
+    temperature: 0,
+    system:
+      "You are a Power BI visualization designer. Given a natural-language request and the dataset schema, " +
+      "choose the best chart and field mapping. Output ONLY a JSON object — no prose, no markdown fences — with keys: " +
+      `title (string), chartType (one of ${CHART_TYPES.join("|")}), x (string field/column name), ` +
+      "y (string field, measure, or aggregation), filters (array of {field, operator: eq|in|between, values: string[]}), " +
+      "rationale (one short sentence). " +
+      "Visualization best practices: use 'line' or 'area' for trends over time, 'bar' for comparisons across categories, " +
+      "'scatter' for correlation between two measures, 'table' for detailed lookups. Put the time/category dimension on x " +
+      "and the measure on y. " +
+      (hasSchema
+        ? "Every field in x, y, and filters MUST reference a real table column or measure from the schema."
+        : "No schema is available; infer plausible field names from the prompt."),
+    messages: [
+      {
+        role: "user",
+        content:
+          (input.reportName ? `Report: "${input.reportName}"\n\n` : "") +
+          `Schema:\n${schemaText}\n\n` +
+          (measuresText ? `Measures: ${measuresText}\n\n` : "") +
+          `Request: ${input.prompt}\n\nReturn the JSON chart specification.`,
+      },
+    ],
+  });
+
+  const first = response.content[0];
+  if (!first || first.type !== "text") throw new Error("Chart generation produced no output");
+  const obj = parseJsonObject(first.text);
+
+  const chartType = CHART_TYPES.includes(obj.chartType as (typeof CHART_TYPES)[number])
+    ? (obj.chartType as GeneratedChartSpec["chartType"])
+    : "bar";
+  const rawFilters = Array.isArray(obj.filters) ? obj.filters : [];
+  const filters: GeneratedChartSpec["filters"] = rawFilters
+    .map((f) => {
+      const rec = f as Record<string, unknown>;
+      const op = rec.operator === "in" || rec.operator === "between" ? rec.operator : "eq";
+      return {
+        field: typeof rec.field === "string" ? rec.field : "",
+        operator: op as "eq" | "in" | "between",
+        values: Array.isArray(rec.values) ? rec.values.map((v) => String(v)) : [],
+      };
+    })
+    .filter((f) => f.field.length > 0);
+
+  return {
+    title: typeof obj.title === "string" && obj.title.trim() ? obj.title : "AI Suggested Visual",
+    chartType,
+    x: typeof obj.x === "string" ? obj.x : "",
+    y: typeof obj.y === "string" ? obj.y : "",
+    filters,
+    ...(typeof obj.rationale === "string" ? { rationale: obj.rationale } : {}),
+  };
+}
+
+export interface DataPrepInput {
+  apiKey: string;
+  model: string;
+  datasetId: string;
+  intent: string;
+  schema: SchemaInput;
+}
+
+export interface GeneratedTransform {
+  type: "trim" | "uppercase" | "lowercase" | "replace_null" | "deduplicate" | "filter_rows" | "cast_type";
+  field: string;
+  replacement?: string;
+  detail?: string;
+}
+
+export interface GeneratedDataPrepPlan {
+  transforms: GeneratedTransform[];
+  summary: string;
+}
+
+const TRANSFORM_TYPES = ["trim", "uppercase", "lowercase", "replace_null", "deduplicate", "filter_rows", "cast_type"] as const;
+
+export async function generateDataPrepPlan(input: DataPrepInput): Promise<GeneratedDataPrepPlan> {
+  const anthropic = new Anthropic({ apiKey: input.apiKey });
+  const hasSchema = input.schema.tables.length > 0;
+  const schemaText = hasSchema
+    ? input.schema.tables
+        .slice(0, 50)
+        .map((t) => `${t.name}(${t.columns.slice(0, 30).map((c) => `${c.name}:${c.dataType}`).join(", ")})`)
+        .join("\n")
+    : "(schema unavailable — infer reasonable field names from the intent)";
+
+  const response = await anthropic.messages.create({
+    model: input.model,
+    max_tokens: 800,
+    temperature: 0,
+    system:
+      "You are a data-preparation planner for governed Power BI datasets. Given an intent and the dataset schema, " +
+      "produce a safe, ordered transformation plan. Output ONLY a JSON object — no prose, no markdown fences — with keys: " +
+      `transforms (array of {type: one of ${TRANSFORM_TYPES.join("|")}, field: string, replacement?: string, detail?: short string}), ` +
+      "summary (one or two sentences describing the plan). " +
+      "Data-prep best practices: prefer non-destructive steps; trim and standardize text before deduplicating; " +
+      "replace nulls with explicit defaults rather than dropping rows; only cast types when the intent requires it; " +
+      "keep the plan minimal — do not invent steps the intent does not justify. " +
+      (hasSchema
+        ? "Every 'field' MUST be a real column from the schema."
+        : "No schema is available; infer plausible column names from the intent."),
+    messages: [
+      {
+        role: "user",
+        content:
+          `Dataset: ${input.datasetId}\n\nSchema:\n${schemaText}\n\nIntent: ${input.intent}\n\nReturn the JSON transformation plan.`,
+      },
+    ],
+  });
+
+  const first = response.content[0];
+  if (!first || first.type !== "text") throw new Error("Data-prep generation produced no output");
+  const obj = parseJsonObject(first.text);
+
+  const rawTransforms = Array.isArray(obj.transforms) ? obj.transforms : [];
+  const transforms: GeneratedTransform[] = rawTransforms
+    .map((t) => {
+      const rec = t as Record<string, unknown>;
+      const type = TRANSFORM_TYPES.includes(rec.type as (typeof TRANSFORM_TYPES)[number])
+        ? (rec.type as GeneratedTransform["type"])
+        : "trim";
+      return {
+        type,
+        field: typeof rec.field === "string" ? rec.field : "",
+        ...(typeof rec.replacement === "string" ? { replacement: rec.replacement } : {}),
+        ...(typeof rec.detail === "string" ? { detail: rec.detail } : {}),
+      };
+    })
+    .filter((t) => t.field.length > 0);
+
+  return {
+    transforms,
+    summary: typeof obj.summary === "string" && obj.summary.trim()
+      ? obj.summary
+      : `Prepared ${transforms.length} transform(s) for dataset ${input.datasetId}.`,
+  };
+}

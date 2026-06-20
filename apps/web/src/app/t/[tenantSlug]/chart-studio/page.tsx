@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { Alert, Badge, EmptyState, PageHeader, Surface } from "@/components/ui";
 
 interface ChartSpec {
@@ -9,6 +9,15 @@ interface ChartSpec {
   x: string;
   y: string;
   filters: Array<{ field: string; operator: string; values: string[] }>;
+  rationale?: string;
+  groundedInSchema?: boolean;
+}
+
+interface ReportItem {
+  id: string;
+  displayName: string;
+  workspaceId: string;
+  datasetId: string;
 }
 
 const CHART_ICON: Record<ChartSpec["chartType"], string> = {
@@ -32,6 +41,26 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [scopeId, setScopeId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setReportsLoading(true);
+      try {
+        const res = await fetch("/api/reports");
+        const json = (await res.json()) as { reports?: ReportItem[] };
+        if (res.ok && !cancelled) setReports(json.reports ?? []);
+      } finally {
+        if (!cancelled) setReportsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedReport = useMemo(() => reports.find((r) => r.id === scopeId), [reports, scopeId]);
   const canSubmit = useMemo(() => prompt.trim().length > 0, [prompt]);
 
   async function generateChart(): Promise<void> {
@@ -42,7 +71,16 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
       const res = await fetch("/api/chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt,
+          ...(selectedReport
+            ? {
+                reportName: selectedReport.displayName,
+                workspaceId: selectedReport.workspaceId,
+                datasetId: selectedReport.datasetId,
+              }
+            : {}),
+        }),
       });
       const json = (await res.json()) as ChartSpec & { error?: string };
       if (!res.ok) {
@@ -67,6 +105,24 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
       <div className="workspace-layout">
         <Surface title="Prompt">
           <div className="stack">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label htmlFor="chart-scope" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>
+                Dataset scope
+              </label>
+              <select id="chart-scope" value={scopeId} onChange={(e) => setScopeId(e.target.value)} disabled={reportsLoading}>
+                <option value="">
+                  {reportsLoading ? "Loading reports…" : "No dataset (infer fields from prompt)"}
+                </option>
+                {reports.map((r) => (
+                  <option key={r.id} value={r.id}>{r.displayName}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                {selectedReport
+                  ? "Field names are mapped to this dataset's real schema."
+                  : "Select a dataset so the chart maps to real columns and measures."}
+              </span>
+            </div>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -110,11 +166,22 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 30 }}>{CHART_ICON[spec.chartType] ?? "📊"}</span>
-                <div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{spec.title}</div>
-                  <Badge>{spec.chartType}</Badge>
+                  <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                    <Badge>{spec.chartType}</Badge>
+                    {spec.groundedInSchema ? (
+                      <Badge>✓ schema-grounded</Badge>
+                    ) : (
+                      <Badge>inferred fields</Badge>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {spec.rationale ? (
+                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--text-soft)" }}>{spec.rationale}</p>
+              ) : null}
 
               {/* Axis mapping */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

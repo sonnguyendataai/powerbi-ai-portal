@@ -1,12 +1,13 @@
-import { buildDataPrepPlan } from "./data-prep";
+import { buildDataPrepPlan, type DataPrepContext } from "./data-prep";
 import { emitTelemetry } from "./telemetry";
 import type { SessionUser } from "./auth";
 
-export function postDataPrep(
+export async function postDataPrep(
   user: SessionUser,
-  payload: { datasetId: string; intent: string },
+  payload: { datasetId: string; intent: string; workspaceId?: string | undefined },
 ) {
-  const plan = buildDataPrepPlan(user, payload.datasetId, payload.intent);
+  const context: DataPrepContext = payload.workspaceId ? { workspaceId: payload.workspaceId } : {};
+  const plan = await buildDataPrepPlan(user, payload.datasetId, payload.intent, context);
   emitTelemetry({
     name: "dataprep.plan_generated",
     tenantId: user.tenantId,

@@ -5,6 +5,9 @@ import { resolveSessionUser } from "@/app/api/_lib/session";
 
 const schema = z.object({
   prompt: z.string().min(1).max(2000),
+  reportName: z.string().min(1).optional(),
+  workspaceId: z.string().min(1).optional(),
+  datasetId: z.string().min(1).optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -15,12 +18,16 @@ export async function POST(req: Request): Promise<Response> {
     if (!parsed.success) {
       return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
     }
-    const spec = postChartPrompt(user, parsed.data.prompt);
+    const { prompt, reportName, workspaceId, datasetId } = parsed.data;
+    const spec = await postChartPrompt(user, prompt, {
+      ...(reportName ? { reportName } : {}),
+      ...(workspaceId ? { workspaceId } : {}),
+      ...(datasetId ? { datasetId } : {}),
+    });
     return NextResponse.json(spec, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "chart_error" },
-      { status: 403 },
-    );
+    const msg = error instanceof Error ? error.message : "chart_error";
+    const status = msg.includes("denied") || msg.includes("forbidden") ? 403 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

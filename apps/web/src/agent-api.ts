@@ -4,6 +4,14 @@ import { buildResource } from "./auth";
 import { loadEnv } from "./env";
 import { generateAnthropicAnswer, generateDaxQuery } from "./llm-anthropic";
 import { getBiOperationsService } from "./bi-ops";
+import {
+  cleanDaxKey,
+  executeDaxQuery,
+  fetchDatasetSchema,
+  fetchPowerBiToken,
+  type PbiMeasure,
+  type PbiTable,
+} from "./powerbi-schema";
 
 export interface ChatAnswer {
   answer: string;
@@ -16,104 +24,6 @@ export interface ReportContext {
   reportName: string;
   workspaceId: string;
   datasetId: string;
-}
-
-async function fetchPowerBiToken(tenantId: string, clientId: string, clientSecret: string): Promise<string> {
-  const form = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope: "https://analysis.windows.net/powerbi/api/.default",
-  });
-  const res = await fetch(
-    `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`,
-    { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form },
-  );
-  if (!res.ok) throw new Error(`Power BI OAuth failed (${res.status})`);
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new Error("Power BI OAuth response missing access_token");
-  return json.access_token;
-}
-
-interface PbiTable { name: string; columns: Array<{ name: string; dataType: string }> }
-interface PbiMeasure { name: string; expression: string }
-
-// Strip [TableName][ColumnName] → ColumnName, or [ColumnName] → ColumnName
-// Power BI executeQueries returns keys in the form "TableName[ColumnName]"
-function cleanDaxKey(k: string): string {
-  const bracket = k.indexOf("[");
-  if (bracket === -1) return k;
-  return k.slice(bracket + 1).replace("]", "");
-}
-
-async function fetchDatasetSchema(
-  workspaceId: string,
-  datasetId: string,
-  token: string,
-): Promise<{ tables: PbiTable[]; measures: PbiMeasure[] }> {
-  // Fetch the live semantic-model schema via the DAX INFO.VIEW.* functions.
-  //
-  // Why not REST /datasets/{id}/tables: it only returns data for Push datasets;
-  // imported / DirectQuery / Direct Lake models return an empty list, leaving
-  // the DAX generator to GUESS table and column names — the root cause of
-  // "Cannot find table 'Date'".
-  //
-  // Why INFO.VIEW.* and not INFO.COLUMNS/INFO.MEASURES: executeQueries blocks
-  // the DMV-style INFO functions ("INFO functions and DMV queries are not
-  // supported"), but INFO.VIEW.TABLES/COLUMNS/MEASURES are real DAX functions
-  // (per Microsoft docs they work in calculated tables/columns/measures), so
-  // they execute through executeQueries. Requires a recent compatibility level;
-  // on older models the query errors and we fall back to schema-free generation.
-  // Keep hidden columns/measures: they are still queryable in DAX, and date
-  // dimensions or key columns are often hidden — excluding them would recreate
-  // the "Cannot find table 'Date'" failure. Only drop the internal RowNumber
-  // column, which cannot be referenced in a query.
-  const [colsRes, measuresRes] = await Promise.all([
-    executeDaxQuery(
-      workspaceId, datasetId, token,
-      'EVALUATE SELECTCOLUMNS(FILTER(INFO.VIEW.COLUMNS(), [DataCategory] <> "RowNumber"), "Table", [Table], "Column", [Name], "DataType", [DataType])',
-    ),
-    executeDaxQuery(
-      workspaceId, datasetId, token,
-      'EVALUATE SELECTCOLUMNS(INFO.VIEW.MEASURES(), "Table", [Table], "Measure", [Name])',
-    ),
-  ]);
-
-  const tableMap = new Map<string, PbiTable>();
-  for (const row of colsRes.rows) {
-    const clean = Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v]));
-    const tableName = typeof clean.Table === "string" ? clean.Table : "";
-    const columnName = typeof clean.Column === "string" ? clean.Column : "";
-    const dataType = typeof clean.DataType === "string" ? clean.DataType : "";
-    if (!tableName || !columnName) continue;
-    let entry = tableMap.get(tableName);
-    if (!entry) {
-      entry = { name: tableName, columns: [] };
-      tableMap.set(tableName, entry);
-    }
-    entry.columns.push({ name: columnName, dataType });
-  }
-
-  const measures: PbiMeasure[] = [];
-  for (const row of measuresRes.rows) {
-    const clean = Object.fromEntries(Object.entries(row).map(([k, v]) => [cleanDaxKey(k), v]));
-    const measureName = typeof clean.Measure === "string" ? clean.Measure : "";
-    if (measureName) measures.push({ name: measureName, expression: "" });
-  }
-
-  if (tableMap.size > 0) {
-    return { tables: [...tableMap.values()], measures };
-  }
-
-  // INFO.VIEW.* returned nothing (older compatibility level, or the call
-  // errored). Fall back to the REST /tables endpoint — it only populates for
-  // Push datasets, but it is harmless and better than an empty schema.
-  const res = await fetch(
-    `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/tables`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  const tables: PbiTable[] = res.ok ? ((await res.json()) as { value: PbiTable[] }).value ?? [] : [];
-  return { tables, measures };
 }
 
 interface PbiRefreshEntry {
@@ -137,90 +47,6 @@ async function fetchRefreshStatus(
   if (!res.ok) return undefined;
   const json = (await res.json()) as { value?: PbiRefreshEntry[] };
   return json.value?.[0];
-}
-
-interface PbiErrorDetail {
-  code?: string;
-  detail?: { type?: number; value?: string };
-}
-interface PbiInnerError {
-  code?: string;
-  details?: PbiErrorDetail[];
-}
-export interface PbiQueryError {
-  code?: string;
-  message?: string;
-  // NOTE: the Power BI error envelope key is literally "pbi.error" (with a dot),
-  // not "pbi_error". The human-readable DAX failure (e.g. "Column 'Revenue'
-  // cannot be found") lives in its details[].detail.value. Reading it under the
-  // wrong key silently drops the message and leaves only the generic code.
-  "pbi.error"?: PbiInnerError;
-}
-
-interface DaxQueryResult {
-  results?: Array<{
-    tables?: Array<{ rows?: Array<Record<string, unknown>>; error?: PbiQueryError }>;
-    error?: PbiQueryError;
-  }>;
-  error?: PbiQueryError;
-}
-
-export function extractPbiErrorMessage(err: PbiQueryError | undefined, httpStatus?: number): string {
-  if (!err) return httpStatus ? `HTTP ${httpStatus}` : "unknown error";
-  // Prefer the human-readable detail message over generic codes. The detail
-  // that carries the actual DAX failure text is the longest non-empty value.
-  const inner = err["pbi.error"];
-  const detailValues = (inner?.details ?? [])
-    .map((d) => d.detail?.value)
-    .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
-  const fromDetails = detailValues.sort((a, b) => b.length - a.length)[0];
-  const fromMessage = err.message && err.message.trim().length > 0 ? err.message : undefined;
-  const fromPbiCode = inner?.code;
-  const fromCode = err.code;
-  // Keep the code as a suffix when we also have a message, so the answer can
-  // distinguish an API-gate error from a DAX name error.
-  const primary = fromDetails ?? fromMessage ?? fromPbiCode ?? fromCode;
-  if (primary && fromCode && primary !== fromCode) return `${primary} (${fromCode})`;
-  return primary ?? (httpStatus ? `HTTP ${httpStatus}` : "unknown error");
-}
-
-async function executeDaxQuery(
-  workspaceId: string,
-  datasetId: string,
-  token: string,
-  daxQuery: string,
-): Promise<{ rows: Array<Record<string, unknown>>; error?: string }> {
-  const res = await fetch(
-    `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/datasets/${datasetId}/executeQueries`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        queries: [{ query: daxQuery }],
-        serializerSettings: { includeNulls: true },
-      }),
-    },
-  );
-  const json = (await res.json()) as DaxQueryResult;
-
-  // Top-level error: HTTP 4xx/5xx — auth failure, tenant setting disabled, insufficient scope
-  if (!res.ok || json.error) {
-    return { rows: [], error: extractPbiErrorMessage(json.error, res.status) };
-  }
-
-  // Per-query error: HTTP 200 but DAX evaluation failed (wrong table/column name lands here)
-  const queryResult = json.results?.[0];
-  if (queryResult?.error) {
-    return { rows: [], error: extractPbiErrorMessage(queryResult.error) };
-  }
-
-  // Per-table error: partial success — some rows may exist alongside an error
-  const tableResult = queryResult?.tables?.[0];
-  if (tableResult?.error) {
-    return { rows: tableResult.rows ?? [], error: extractPbiErrorMessage(tableResult.error) };
-  }
-
-  return { rows: tableResult?.rows ?? [] };
 }
 
 interface PbiDataset { id: string; name: string }

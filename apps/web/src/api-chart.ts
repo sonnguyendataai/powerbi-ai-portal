@@ -1,9 +1,13 @@
-import { generateChartSpec, type ChartSpec } from "./chart-studio";
+import { generateChartSpec, type ChartContext, type ChartSpec } from "./chart-studio";
 import { emitTelemetry } from "./telemetry";
 import type { SessionUser } from "./auth";
 
-export function postChartPrompt(user: SessionUser, prompt: string): ChartSpec {
-  const spec = generateChartSpec(user, prompt);
+export async function postChartPrompt(
+  user: SessionUser,
+  prompt: string,
+  context?: ChartContext,
+): Promise<ChartSpec> {
+  const spec = await generateChartSpec(user, prompt, context);
   emitTelemetry({
     name: "chart.spec_generated",
     tenantId: user.tenantId,
