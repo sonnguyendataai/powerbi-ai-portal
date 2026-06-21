@@ -156,16 +156,46 @@ export interface ChartSpecInput {
   reportName?: string;
 }
 
+// A field binding the report builder can turn into a PBIR projection.
+// `aggregation` applies to numeric column measures; omit for an explicit
+// model measure or a categorical/date column.
+export interface ChartFieldBinding {
+  table: string;
+  field: string;
+  isMeasure: boolean;
+  aggregation?: "sum" | "average" | "count" | "min" | "max" | "none";
+}
+
 export interface GeneratedChartSpec {
   title: string;
   chartType: "bar" | "line" | "area" | "scatter" | "table";
   x: string;
   y: string;
+  xBinding?: ChartFieldBinding;
+  yBinding?: ChartFieldBinding;
   filters: Array<{ field: string; operator: "eq" | "in" | "between"; values: string[] }>;
   rationale?: string;
 }
 
 const CHART_TYPES = ["bar", "line", "area", "scatter", "table"] as const;
+const AGGREGATIONS = ["sum", "average", "count", "min", "max", "none"] as const;
+
+function parseBinding(value: unknown): ChartFieldBinding | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const rec = value as Record<string, unknown>;
+  const table = typeof rec.table === "string" ? rec.table : "";
+  const field = typeof rec.field === "string" ? rec.field : "";
+  if (!table || !field) return undefined;
+  const agg = AGGREGATIONS.includes(rec.aggregation as (typeof AGGREGATIONS)[number])
+    ? (rec.aggregation as ChartFieldBinding["aggregation"])
+    : undefined;
+  return {
+    table,
+    field,
+    isMeasure: rec.isMeasure === true,
+    ...(agg ? { aggregation: agg } : {}),
+  };
+}
 
 export async function generateChartSpec(input: ChartSpecInput): Promise<GeneratedChartSpec> {
   const anthropic = new Anthropic({ apiKey: input.apiKey });
@@ -180,20 +210,25 @@ export async function generateChartSpec(input: ChartSpecInput): Promise<Generate
 
   const response = await anthropic.messages.create({
     model: input.model,
-    max_tokens: 600,
+    max_tokens: 700,
     temperature: 0,
     system:
       "You are a Power BI visualization designer. Given a natural-language request and the dataset schema, " +
       "choose the best chart and field mapping. Output ONLY a JSON object — no prose, no markdown fences — with keys: " +
-      `title (string), chartType (one of ${CHART_TYPES.join("|")}), x (string field/column name), ` +
-      "y (string field, measure, or aggregation), filters (array of {field, operator: eq|in|between, values: string[]}), " +
-      "rationale (one short sentence). " +
+      `title (string), chartType (one of ${CHART_TYPES.join("|")}), x (string field/column name for display), ` +
+      "y (string field/measure for display), " +
+      "xBinding ({table, field, isMeasure: bool, aggregation: sum|average|count|min|max|none}), " +
+      "yBinding (same shape as xBinding), " +
+      "filters (array of {field, operator: eq|in|between, values: string[]}), rationale (one short sentence). " +
+      "For xBinding/yBinding: 'table' is the owning table name, 'field' is the column or measure name, " +
+      "'isMeasure' is true only for a model measure, and 'aggregation' is the aggregation to apply to a numeric column " +
+      "(use 'none' for categorical/date columns and for explicit measures). The x axis is usually a date/category " +
+      "column (aggregation 'none'); the y axis is usually a numeric measure (e.g. sum of an amount column). " +
       "Visualization best practices: use 'line' or 'area' for trends over time, 'bar' for comparisons across categories, " +
-      "'scatter' for correlation between two measures, 'table' for detailed lookups. Put the time/category dimension on x " +
-      "and the measure on y. " +
+      "'scatter' for correlation between two measures, 'table' for detailed lookups. " +
       (hasSchema
-        ? "Every field in x, y, and filters MUST reference a real table column or measure from the schema."
-        : "No schema is available; infer plausible field names from the prompt."),
+        ? "Every table/field in x, y, xBinding, yBinding, and filters MUST exist in the schema."
+        : "No schema is available; infer plausible names and leave xBinding/yBinding null."),
     messages: [
       {
         role: "user",
@@ -226,12 +261,17 @@ export async function generateChartSpec(input: ChartSpecInput): Promise<Generate
     })
     .filter((f) => f.field.length > 0);
 
+  const xBinding = parseBinding(obj.xBinding);
+  const yBinding = parseBinding(obj.yBinding);
+
   return {
     title: typeof obj.title === "string" && obj.title.trim() ? obj.title : "AI Suggested Visual",
     chartType,
     x: typeof obj.x === "string" ? obj.x : "",
     y: typeof obj.y === "string" ? obj.y : "",
     filters,
+    ...(xBinding ? { xBinding } : {}),
+    ...(yBinding ? { yBinding } : {}),
     ...(typeof obj.rationale === "string" ? { rationale: obj.rationale } : {}),
   };
 }

@@ -11,6 +11,7 @@ interface ChartSpec {
   filters: Array<{ field: string; operator: string; values: string[] }>;
   rationale?: string;
   groundedInSchema?: boolean;
+  createdReport?: { reportId: string; workspaceId: string; webUrl: string };
 }
 
 interface ReportItem {
@@ -40,6 +41,7 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
   const [spec, setSpec] = useState<ChartSpec | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
@@ -63,16 +65,17 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
   const selectedReport = useMemo(() => reports.find((r) => r.id === scopeId), [reports, scopeId]);
   const canSubmit = useMemo(() => prompt.trim().length > 0, [prompt]);
 
-  async function generateChart(): Promise<void> {
+  async function submit(create: boolean): Promise<void> {
     if (!canSubmit) return;
     setError("");
-    setLoading(true);
+    if (create) setCreating(true); else setLoading(true);
     try {
       const res = await fetch("/api/chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
+          create,
           ...(selectedReport
             ? {
                 reportName: selectedReport.displayName,
@@ -84,7 +87,7 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
       });
       const json = (await res.json()) as ChartSpec & { error?: string };
       if (!res.ok) {
-        setError(json.error ?? "Failed to generate chart spec.");
+        setError(json.error ?? (create ? "Failed to create report." : "Failed to generate chart spec."));
         return;
       }
       setSpec(json);
@@ -92,6 +95,7 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
       setError(err instanceof Error ? err.message : "Request failed");
     } finally {
       setLoading(false);
+      setCreating(false);
     }
   }
 
@@ -128,7 +132,7 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe the chart you want, e.g. 'Show monthly sales trend by region'…"
               style={{ minHeight: 160, resize: "vertical" }}
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void generateChart(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit(false); }}
             />
             <div className="stack-sm">
               {PROMPT_PRESETS.map((p) => (
@@ -145,18 +149,39 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
                 >{p}</button>
               ))}
             </div>
-            <button onClick={() => void generateChart()} disabled={loading || !canSubmit}>
-              {loading ? (
-                <><span style={{ display: "inline-block", animation: "spin 0.7s linear infinite" }}>⟳</span> Generating…</>
-              ) : "Generate chart spec"}
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => void submit(false)} disabled={loading || creating || !canSubmit} style={{ flex: 1, minWidth: 160 }}>
+                {loading ? (
+                  <><span style={{ display: "inline-block", animation: "spin 0.7s linear infinite" }}>⟳</span> Generating…</>
+                ) : "Preview spec"}
+              </button>
+              <button
+                className="secondary"
+                onClick={() => void submit(true)}
+                disabled={loading || creating || !canSubmit || !selectedReport}
+                title={selectedReport ? "Create a real Power BI report from this prompt" : "Select a dataset scope to create a report"}
+                style={{ flex: 1, minWidth: 160 }}
+              >
+                {creating ? (
+                  <><span style={{ display: "inline-block", animation: "spin 0.7s linear infinite" }}>⟳</span> Creating…</>
+                ) : "Create report in Power BI"}
+              </button>
+            </div>
+            {!selectedReport ? (
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                Select a dataset scope above to enable report creation. Requires a Fabric/Premium-backed workspace.
+              </span>
+            ) : null}
             {error ? <Alert>{error}</Alert> : null}
           </div>
         </Surface>
 
         <Surface title="Generated spec">
-          {loading ? (
+          {loading || creating ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {creating ? (
+                <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Building the report definition and creating it in Power BI…</p>
+              ) : null}
               <div style={{ height: 120, borderRadius: 10, background: "linear-gradient(90deg, rgba(108,142,247,0.06) 0%, rgba(108,142,247,0.14) 50%, rgba(108,142,247,0.06) 100%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
               {[60, 80].map((w, i) => (
                 <div key={i} style={{ height: 14, width: `${w}%`, borderRadius: 6, background: "linear-gradient(90deg, rgba(108,142,247,0.06) 0%, rgba(108,142,247,0.14) 50%, rgba(108,142,247,0.06) 100%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
@@ -181,6 +206,22 @@ export default function TenantChartStudioPage({ params }: { params: Promise<{ te
 
               {spec.rationale ? (
                 <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--text-soft)" }}>{spec.rationale}</p>
+              ) : null}
+
+              {spec.createdReport ? (
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                  padding: "12px 14px", borderRadius: 10,
+                  background: "rgba(52, 211, 153, 0.08)", border: "1px solid rgba(52, 211, 153, 0.25)",
+                }}>
+                  <span style={{ fontSize: 13, color: "var(--text)" }}>✓ Report created in Power BI</span>
+                  <a
+                    href={spec.createdReport.webUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13, fontWeight: 600, color: "var(--brand-1)", whiteSpace: "nowrap" }}
+                  >Open report ↗</a>
+                </div>
               ) : null}
 
               {/* Axis mapping */}

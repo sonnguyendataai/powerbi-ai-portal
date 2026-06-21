@@ -8,6 +8,7 @@ const schema = z.object({
   reportName: z.string().min(1).optional(),
   workspaceId: z.string().min(1).optional(),
   datasetId: z.string().min(1).optional(),
+  create: z.boolean().optional(),
 });
 
 export async function POST(req: Request): Promise<Response> {
@@ -18,12 +19,12 @@ export async function POST(req: Request): Promise<Response> {
     if (!parsed.success) {
       return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
     }
-    const { prompt, reportName, workspaceId, datasetId } = parsed.data;
+    const { prompt, reportName, workspaceId, datasetId, create } = parsed.data;
     const spec = await postChartPrompt(user, prompt, {
       ...(reportName ? { reportName } : {}),
       ...(workspaceId ? { workspaceId } : {}),
       ...(datasetId ? { datasetId } : {}),
-    });
+    }, create ?? false);
     return NextResponse.json(spec, { status: 200 });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "chart_error";

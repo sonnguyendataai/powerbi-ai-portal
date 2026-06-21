@@ -41,25 +41,46 @@ interface DaxQueryResult {
   error?: PbiQueryError;
 }
 
-export async function fetchPowerBiToken(
+async function fetchToken(
   tenantId: string,
   clientId: string,
   clientSecret: string,
+  scope: string,
+  label: string,
 ): Promise<string> {
   const form = new URLSearchParams({
     grant_type: "client_credentials",
     client_id: clientId,
     client_secret: clientSecret,
-    scope: "https://analysis.windows.net/powerbi/api/.default",
+    scope,
   });
   const res = await fetch(
     `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`,
     { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form },
   );
-  if (!res.ok) throw new Error(`Power BI OAuth failed (${res.status})`);
+  if (!res.ok) throw new Error(`${label} OAuth failed (${res.status})`);
   const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new Error("Power BI OAuth response missing access_token");
+  if (!json.access_token) throw new Error(`${label} OAuth response missing access_token`);
   return json.access_token;
+}
+
+export async function fetchPowerBiToken(
+  tenantId: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<string> {
+  return fetchToken(tenantId, clientId, clientSecret, "https://analysis.windows.net/powerbi/api/.default", "Power BI");
+}
+
+// Fabric APIs (api.fabric.microsoft.com) require a token for the Fabric audience.
+// The same service principal works as long as it has the Fabric scopes granted
+// and is a Contributor on the target workspace.
+export async function fetchFabricToken(
+  tenantId: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<string> {
+  return fetchToken(tenantId, clientId, clientSecret, "https://api.fabric.microsoft.com/.default", "Fabric");
 }
 
 // Strip [TableName][ColumnName] → ColumnName, or [ColumnName] → ColumnName.
