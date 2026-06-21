@@ -41,6 +41,7 @@ pnpm test
 - Inline AI chat panel embedded in every report view — auto-sends report/dataset context for targeted answers, with a Clear action to reset the conversation
 - Ask DataMind (`/agent`) supports a data-scope selector to ground answers in a specific report/dataset
 - Chart Studio and Data Prep are Claude-backed and schema-grounded: chart specs map to real columns/measures (with visualization best practices), and transform plans reference real columns; both fall back gracefully and surface a clear error when AI is not configured (no silent mock output)
+- Chart Studio can create a **real Power BI report** from a prompt: it builds a PBIR report definition bound to the scoped semantic model and calls the Fabric Create Report API (requires a Fabric/Premium/PPU workspace, the service principal as workspace Contributor, and Fabric scopes). Without those it still previews the spec and surfaces the Fabric error.
 - Governance-first architecture with audit, reliability, and compliance hooks
 - Legacy-proven BI administration flows:
   - user/role/report/page/rule permission assignments

@@ -27,7 +27,8 @@
   - `src/agent-api.ts` — AI Q&A orchestration; calls PBI REST API directly; fast/slow path based on `reportContext`
   - `src/powerbi-schema.ts` — **shared** Power BI helper: service-principal auth, `executeQueries`, error extraction (`extractPbiErrorMessage`), and live schema discovery (`fetchDatasetSchema` via `INFO.VIEW.*`). Used by `agent-api.ts`, `chart-studio.ts`, `data-prep.ts`
   - `src/llm-anthropic.ts` — Claude API wrapper: report-context-aware answers, DAX generation, chart-spec generation, and data-prep-plan generation (JSON-output helpers)
-  - `src/chart-studio.ts` / `src/data-prep.ts` — Anthropic-backed, schema-grounded chart-spec and transform-plan generators (async; require `ANTHROPIC_API_KEY`)
+  - `src/chart-studio.ts` / `src/data-prep.ts` — Anthropic-backed, schema-grounded chart-spec and transform-plan generators (async; require `ANTHROPIC_API_KEY`). `chart-studio.ts` with `create=true` builds a PBIR report and creates it via the Fabric API
+  - `src/pbir-builder.ts` — assembles a minimal PBIR report definition (definition.pbir `byConnection`, report/page/visual JSON) and calls the Fabric Create Report API (handles the 202 long-running operation)
   - `src/api-chat.ts` / `src/api-chart.ts` / `src/api-data-prep.ts` — thin telemetry wrappers around the generators
   - `src/bi-ops.ts` — in-memory BI operations service with PostgreSQL persistence; `reloadBiOperationsService()` reloads the snapshot from DB on a cache miss (fixes cross-instance `run_not_found`)
   - `src/bi-ops-persistence.ts` — DB read/write for `bi_ops_*` tables; must be `await`-ed before sync response
@@ -66,6 +67,13 @@
 - REST `/datasets/{id}/tables` alone returns empty for imported/DirectQuery/Direct Lake models — never rely on it as the primary schema source, or the model will guess table names (e.g. `Date`).
 - Keep hidden columns/measures (date dims and keys are often hidden); drop only the internal `RowNumber` column.
 - The `executeQueries` error envelope nests its message under the key `"pbi.error"` (a literal dot, NOT `pbi_error`). Use `extractPbiErrorMessage`; it reads the longest detail value and appends the generic code. A bad DAX query retries once with the real error fed back.
+
+### Report creation (`src/pbir-builder.ts`)
+- "Create report" uses the **Fabric** Items API (`POST https://api.fabric.microsoft.com/v1/workspaces/{id}/reports`), NOT the Power BI REST API — the latter has no "create report with layout" operation (only Clone/Rebind/Update Report Content).
+- Use `fetchFabricToken` (scope `https://api.fabric.microsoft.com/.default`), a separate token from the Power BI one. Same service principal works but it must be a workspace **Contributor** with Fabric scopes granted.
+- Reports are built in **PBIR** format. REST deployment requires a `byConnection` `datasetReference`; only `semanticmodelid=<id>` is needed in the connection string. Parts are base64-encoded into `definition.parts[]`.
+- Create returns 201 (sync) or 202 (long-running operation) — poll the `Location` operation URL until `Succeeded`, then read `/result` for the new report id.
+- Requires Fabric/Premium/PPU capacity. On shared capacity the API errors; surface it verbatim rather than pretending success.
 
 ### Persistence
 - `flushBiOpsPersistence()` is called before the sync route returns 202 to prevent "run_not_found" errors on serverless cold starts (write side).
